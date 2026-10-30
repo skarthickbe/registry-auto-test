@@ -3,7 +3,6 @@
 //
 //   node scripts/scan-registry.mjs           scan once
 //   node scripts/scan-registry.mjs --watch   rescan whenever a source file changes
-//   node scripts/scan-registry.mjs --debug   also log every lookup the scanner makes
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,9 +16,6 @@ const NAV_SQL = config.navSqlPath ? path.resolve(ROOT, config.navSqlPath) : unde
 const OUTPUT = path.resolve(ROOT, config.output);
 
 const rel = (file) => path.relative(APP, file);
-
-const DEBUG = process.argv.includes('--debug');
-const debug = (method, message) => DEBUG && console.log(`[${method}] ${message}`);
 
 // ---------------------------------------------------------------------------
 // Project index: lazily parsed source files, import resolution, constant lookup
@@ -47,11 +43,9 @@ class ProjectIndex {
       }
       if (exportName) {
         const target = this.resolveImport(file, stmt.moduleSpecifier.text);
-        debug('importOf', `${name} in ${rel(file)} → ${target ? `${rel(target)} (${exportName})` : 'not resolved'}`);
         return target ? { file: target, exportName } : undefined;
       }
     }
-    debug('importOf', `${name} is not imported in ${rel(file)}`);
     return undefined;
   }
 
@@ -59,12 +53,8 @@ class ProjectIndex {
   resolveImport(fromFile, spec) {
     const base = spec.startsWith('.') ? path.resolve(path.dirname(fromFile), spec) : path.join(this.srcDir, spec);
     for (const candidate of [base, `${base}.ts`, path.join(base, 'index.ts')]) {
-      if (candidate.endsWith('.ts') && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        debug('resolveImport', `'${spec}' → ${rel(candidate)}`);
-        return candidate;
-      }
+      if (candidate.endsWith('.ts') && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
     }
-    debug('resolveImport', `'${spec}' → not a project file (package import?)`);
     return undefined;
   }
 
@@ -73,82 +63,60 @@ class ProjectIndex {
     const sf = this.getSourceFile(file);
     if (!sf || depth > 8) return undefined;
     for (const stmt of sf.statements) {
-      if (name === 'default' && ts.isExportAssignment(stmt)) {
-        debug('lookupConst', `export default in ${rel(file)} (line ${this.lineOf(stmt)})`);
-        return { expr: stmt.expression, file };
-      }
+      if (name === 'default' && ts.isExportAssignment(stmt)) return { expr: stmt.expression, file };
       if (!ts.isVariableStatement(stmt)) continue;
       for (const decl of stmt.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name) && decl.name.text === name && decl.initializer) {
-          debug('lookupConst', `${name} found in ${rel(file)} (line ${this.lineOf(decl)})`);
-          return { expr: decl.initializer, file };
-        }
+        if (ts.isIdentifier(decl.name) && decl.name.text === name && decl.initializer) return { expr: decl.initializer, file };
       }
     }
     const imp = this.importOf(file, name);
-    if (!imp) debug('lookupConst', `${name} not found from ${rel(file)}`);
     return imp ? this.lookupConst(imp.file, imp.exportName, depth + 1) : undefined;
   }
 
   /** Best-effort string value of an expression (literals, consts, enums, concatenation). */
   evalString(expr, file, depth = 0) {
     const e = unwrap(expr);
-    const done = (value) => {
-      if (depth === 0) debug('evalString', `${e.getText().replace(/\s+/g, ' ')} → ${JSON.stringify(value)}`);
-      return value;
-    };
-    if (depth > 8) return done(e.getText());
-    if (ts.isStringLiteralLike(e)) return done(e.text);
-    if (ts.isNumericLiteral(e)) return done(e.text);
+    if (depth > 8) return e.getText();
+    if (ts.isStringLiteralLike(e)) return e.text;
+    if (ts.isNumericLiteral(e)) return e.text;
     if (ts.isTemplateExpression(e)) {
-      return done(e.head.text + e.templateSpans.map((s) => this.evalString(s.expression, file, depth + 1) + s.literal.text).join(''));
+      return e.head.text + e.templateSpans.map((s) => this.evalString(s.expression, file, depth + 1) + s.literal.text).join('');
     }
     if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-      return done(this.evalString(e.left, file, depth + 1) + this.evalString(e.right, file, depth + 1));
+      return this.evalString(e.left, file, depth + 1) + this.evalString(e.right, file, depth + 1);
     }
     if (ts.isIdentifier(e)) {
       const found = this.lookupConst(file, e.text);
-      return done(found ? this.evalString(found.expr, found.file, depth + 1) : e.text);
+      return found ? this.evalString(found.expr, found.file, depth + 1) : e.text;
     }
     if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression)) {
       const en = this.findDeclaration(file, e.expression.text, ts.isEnumDeclaration);
       const member = en?.node.members.find((m) => m.name.getText() === e.name.text);
-      if (member?.initializer) return done(this.evalString(member.initializer, en.file, depth + 1));
+      if (member?.initializer) return this.evalString(member.initializer, en.file, depth + 1);
     }
-    return done(e.getText());
+    return e.getText();
   }
 
   findDeclaration(file, name, kind, depth = 0) {
     const sf = this.getSourceFile(file);
     if (!sf || depth > 8) return undefined;
     const node = sf.statements.find((s) => kind(s) && s.name?.text === name);
-    if (node) {
-      debug('findDeclaration', `${name} declared in ${rel(file)} (line ${this.lineOf(node)})`);
-      return { node, file };
-    }
+    if (node) return { node, file };
     const imp = this.importOf(file, name);
-    if (!imp) debug('findDeclaration', `${name} not found from ${rel(file)}`);
     return imp ? this.findDeclaration(imp.file, imp.exportName, kind, depth + 1) : undefined;
   }
 
   resolveClassFile(file, name) {
-    const found = this.findDeclaration(file, name, ts.isClassDeclaration)?.file;
-    debug('resolveClassFile', `${name} → ${found ? rel(found) : 'not found'}`);
-    return found;
+    return this.findDeclaration(file, name, ts.isClassDeclaration)?.file;
   }
 
   defaultExportClass(file) {
     const sf = this.getSourceFile(file);
     if (!sf) return undefined;
     for (const stmt of sf.statements) {
-      let name;
-      if (ts.isClassDeclaration(stmt) && stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) name = stmt.name?.text;
-      else if (ts.isExportAssignment(stmt) && ts.isIdentifier(stmt.expression)) name = stmt.expression.text;
-      else continue;
-      debug('defaultExportClass', `${rel(file)} → ${name}`);
-      return name;
+      if (ts.isClassDeclaration(stmt) && stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) return stmt.name?.text;
+      if (ts.isExportAssignment(stmt) && ts.isIdentifier(stmt.expression)) return stmt.expression.text;
     }
-    debug('defaultExportClass', `${rel(file)} has no default export class`);
     return undefined;
   }
 
@@ -157,10 +125,8 @@ class ProjectIndex {
       let sf;
       try {
         sf = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-        debug('getSourceFile', `parsed ${rel(file)}`);
       } catch {
         sf = undefined;
-        debug('getSourceFile', `could not read ${rel(file)}`);
       }
       this.files.set(file, sf);
     }
@@ -198,4 +164,195 @@ function walkFiles(dir, out = []) {
     else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) out.push(full);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Route discovery
+// ---------------------------------------------------------------------------
+
+function joinRoutePath(parent, child) {
+  return `/${[...parent.split('/'), ...child.split('/')].filter(Boolean).join('/')}`;
+}
+
+function discoverRoutes(index) {
+  const routes = [];
+  const warnings = [];
+  const visited = new Set();
+
+  /** A route array written inline (`[...]`) or referenced through a const. */
+  const resolveArray = (expr, file) => {
+    const e = unwrap(expr);
+    if (ts.isArrayLiteralExpression(e)) return { arr: e, file };
+    if (ts.isIdentifier(e)) {
+      const found = index.lookupConst(file, e.text);
+      if (found) return resolveArray(found.expr, found.file);
+    }
+    return undefined;
+  };
+
+  /** NgModule style: RouterModule.forChild(routes) / forRoot(routes). */
+  const forChildArray = (node, file) => {
+    let found;
+    const visit = (n) => {
+      if (found) return;
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && /^for(Child|Root)$/.test(n.expression.name.text) && n.arguments[0]) {
+        found = resolveArray(n.arguments[0], file);
+        return;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(node);
+    return found;
+  };
+
+  /** The routes a lazily loaded file exports: `export default [...]`, `export const x: Routes`, or forChild(). */
+  const exportedRoutes = (file, member) => {
+    const sf = index.getSourceFile(file);
+    if (!sf) return undefined;
+    if (member) {
+      const found = index.lookupConst(file, member);
+      return found ? resolveArray(found.expr, found.file) : forChildArray(sf, file);
+    }
+    for (const stmt of sf.statements) {
+      if (ts.isExportAssignment(stmt) && !stmt.isExportEquals) {
+        const resolved = resolveArray(stmt.expression, file);
+        if (resolved) return resolved;
+      }
+    }
+    for (const stmt of sf.statements) {
+      if (!ts.isVariableStatement(stmt) || !stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      for (const decl of stmt.declarationList.declarations) {
+        if (decl.initializer && decl.type && /\bRoutes?\b/.test(decl.type.getText(sf))) {
+          const resolved = resolveArray(decl.initializer, file);
+          if (resolved) return resolved;
+        }
+      }
+    }
+    return forChildArray(sf, file);
+  };
+
+  /** `() => import('./x').then((m) => m.Y)` → { spec: './x', member: 'Y', file }. */
+  const dynamicImport = (expr, file) => {
+    let spec;
+    let member;
+    const visit = (n) => {
+      if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword && n.arguments[0] && ts.isStringLiteralLike(n.arguments[0])) {
+        spec = n.arguments[0].text;
+      }
+      if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.parent && ts.isArrowFunction(n.parent) && n.parent.body === n) {
+        member = n.name.text;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(expr);
+    return { spec, member, file: spec ? index.resolveImport(file, spec) : undefined };
+  };
+
+  const walk = ({ arr, file }, parentPath, parents, depth) => {
+    const key = `${file}:${arr.pos}|${parentPath}`;
+    if (depth > 12 || visited.has(key)) return;
+    visited.add(key);
+    for (const element of arr.elements) {
+      if (ts.isSpreadElement(element)) {
+        const spread = resolveArray(element.expression, file);
+        if (spread) walk(spread, parentPath, parents, depth + 1);
+        continue;
+      }
+      let obj = unwrap(element);
+      let objFile = file;
+      if (ts.isIdentifier(obj)) {
+        const found = index.lookupConst(file, obj.text);
+        if (!found) continue;
+        obj = unwrap(found.expr);
+        objFile = found.file;
+      }
+      if (!ts.isObjectLiteralExpression(obj)) continue;
+
+      const pathExpr = getProperty(obj, 'path');
+      const fullPath = joinRoutePath(parentPath, pathExpr ? index.evalString(pathExpr, objFile) : '');
+      let component;
+      let componentFile;
+
+      const componentExpr = getProperty(obj, 'component');
+      if (componentExpr && ts.isIdentifier(unwrap(componentExpr))) {
+        component = unwrap(componentExpr).text;
+        componentFile = index.resolveClassFile(objFile, component);
+      }
+      const loadComponent = getProperty(obj, 'loadComponent');
+      if (loadComponent) {
+        const imp = dynamicImport(loadComponent, objFile);
+        if (imp.file) {
+          component = imp.member ?? index.defaultExportClass(imp.file);
+          componentFile = imp.file;
+        } else if (imp.spec) {
+          warnings.push(`Could not resolve loadComponent import '${imp.spec}' in ${rel(objFile)}`);
+        }
+      }
+      const redirectExpr = getProperty(obj, 'redirectTo');
+      const redirectTo = redirectExpr ? index.evalString(redirectExpr, objFile) : undefined;
+
+      // Pure grouping entries (only children / loadChildren) are not routes of their own.
+      if (component || redirectTo !== undefined) {
+        routes.push({
+          id: `r${routes.length + 1}`,
+          path: fullPath,
+          component,
+          componentFile: componentFile ? rel(componentFile) : undefined,
+          parents,
+          redirectTo,
+          definedIn: { file: rel(objFile), line: index.lineOf(obj) },
+        });
+      }
+
+      const childParents = component ? [...parents, component] : parents;
+      const children = getProperty(obj, 'children');
+      if (children) {
+        const childArr = resolveArray(children, objFile);
+        if (childArr) walk(childArr, fullPath, childParents, depth + 1);
+      }
+      const loadChildren = getProperty(obj, 'loadChildren');
+      if (loadChildren) {
+        const imp = dynamicImport(loadChildren, objFile);
+        const childArr = imp.file ? exportedRoutes(imp.file, imp.member) : undefined;
+        if (childArr) walk(childArr, fullPath, childParents, depth + 1);
+        else warnings.push(`Could not load child routes '${imp.spec ?? loadChildren.getText()}' in ${rel(objFile)}`);
+      }
+    }
+  };
+
+  const root = findRootRoutes(index, resolveArray, exportedRoutes);
+  if (!root) {
+    warnings.push('No root route configuration found (looked for provideRouter(), RouterModule.forRoot() and app.routes.ts).');
+    return { routes, warnings };
+  }
+  walk(root, '', [], 0);
+  return { routes, rootFile: rel(root.file), warnings };
+}
+
+/** The array passed to provideRouter() / RouterModule.forRoot(), falling back to app.routes.ts. */
+function findRootRoutes(index, resolveArray, exportedRoutes) {
+  const files = walkFiles(index.srcDir);
+  for (const file of files) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (!/provideRouter\s*\(|RouterModule\.forRoot\s*\(/.test(text)) continue;
+    const sf = index.getSourceFile(file);
+    let result;
+    const visit = (n) => {
+      if (result) return;
+      if (ts.isCallExpression(n) && n.arguments[0] && /^(provideRouter|RouterModule\.forRoot)$/.test(n.expression.getText())) {
+        const arg = unwrap(n.arguments[0]);
+        if (ts.isIdentifier(arg)) {
+          const found = index.lookupConst(file, arg.text);
+          result = found ? resolveArray(found.expr, found.file) : undefined;
+        } else {
+          result = resolveArray(arg, file);
+        }
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    if (result) return result;
+  }
+  const fallback = files.find((f) => /^(app\.routes|app-routing\.module)\.ts$/.test(path.basename(f)));
+  return fallback ? exportedRoutes(fallback) : undefined;
 }
