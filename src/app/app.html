@@ -1,3 +1,16 @@
+<header class="app-header">
+  <img class="logo" src="images/lrg-logo.png" alt="LRG Patient Registry" />
+  <span class="app-title">Registry Auto Test</span>
+  <button
+    type="button"
+    class="theme-toggle"
+    [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+    (click)="toggleTheme()"
+  >
+    {{ theme() === 'dark' ? '☀️ Light' : '🌙 Dark' }}
+  </button>
+</header>
+
 <aside class="sidebar">
   <app-nav-panel
     (selectionChange)="onSelectionChange($event)"
@@ -7,15 +20,6 @@
 </aside>
 
 <main class="content">
-  <button
-    type="button"
-    class="theme-toggle"
-    [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
-    (click)="toggleTheme()"
-  >
-    {{ theme() === 'dark' ? '☀️ Light' : '🌙 Dark' }}
-  </button>
-
   @if (notice(); as message) {
     <p class="notice">{{ message }}</p>
   }
@@ -61,7 +65,7 @@
     }
   } @else {
     <div class="empty">
-      <h1>Registry Auto Test</h1>
+      <h1>Select a navigation tab</h1>
       <p class="muted">
         Pick a menu and tab on the left. Menus are loaded from the Registry App's routes.
       </p>

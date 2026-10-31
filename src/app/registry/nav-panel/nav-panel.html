@@ -1,10 +1,12 @@
-<section class="panel">
-  <h2 class="panel-title"><span class="step">1</span> Source</h2>
+<section class="section">
+  <h2 class="section-title">Source</h2>
   @if (registry.nav(); as nav) {
-    <p class="source">
-      Registry App routes · {{ nav.routes.length }} routes · scanned
-      {{ nav.generatedAt | date: 'shortTime' }}
+    <p class="status">
+      <span class="dot ok"></span>
+      <strong>{{ nav.routes.length }} routes</strong>
+      <span class="muted">· scanned {{ nav.generatedAt | date: 'shortTime' }}</span>
     </p>
+    <p class="muted small">Registry App routes + navigation SQL</p>
     @if (nav.warnings.length) {
       <details class="warnings">
         <summary>{{ nav.warnings.length }} scan warning(s)</summary>
@@ -16,14 +18,14 @@
       </details>
     }
   } @else if (registry.error(); as error) {
-    <p class="error">{{ error }}</p>
+    <p class="status error"><span class="dot bad"></span>{{ error }}</p>
   } @else {
-    <p class="source">Loading routes…</p>
+    <p class="status muted"><span class="dot"></span>Loading routes…</p>
   }
 </section>
 
-<section class="panel">
-  <h2 class="panel-title"><span class="step">2</span> Navigation Tab</h2>
+<section class="section">
+  <h2 class="section-title">Navigation</h2>
 
   <label class="field-label" for="menu">Menu</label>
   <select id="menu" class="select" (change)="selectMenu($any($event.target).value)">
@@ -64,6 +66,10 @@
       {{ registry.loading() ? 'Loading…' : 'Refresh' }}
     </button>
   </div>
+</section>
+
+<section class="section">
+  <h2 class="section-title">Options</h2>
 
   <label class="check">
     <input
@@ -74,18 +80,19 @@
     Show other menus (static / unconfirmed routes)
   </label>
 
-  <div class="row depth">
-    <label for="depth">Child depth</label>
-    <select id="depth" class="select" (change)="selectDepth($any($event.target).value)">
-      @for (opt of depthOptions; track opt.label) {
-        <option [value]="depthKey(opt.value)" [selected]="opt.value === childDepth()">
-          {{ opt.label }}
-        </option>
-      }
-    </select>
-  </div>
+  <label class="field-label" for="depth">Child depth</label>
+  <select id="depth" class="select" (change)="selectDepth($any($event.target).value)">
+    @for (opt of depthOptions; track opt.label) {
+      <option [value]="depthKey(opt.value)" [selected]="opt.value === childDepth()">
+        {{ opt.label }}
+      </option>
+    }
+  </select>
+</section>
 
-  <div class="row actions">
+<section class="section">
+  <h2 class="section-title">Actions</h2>
+  <div class="actions">
     <button type="button" class="btn primary" [disabled]="!selectedTab()" (click)="generate()">
       Generate Checklist
     </button>

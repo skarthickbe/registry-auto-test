@@ -3,7 +3,7 @@
 @mixin dark-theme {
   color-scheme: dark;
   --page: #10141c;
-  --bg: #161b26;
+  --bg: #0c1017;
   --surface: #1b2130;
   --border: #323a4b;
   --border-strong: #4a5468;
@@ -20,7 +20,7 @@
 :root {
   color-scheme: light;
   --page: #f6f7f9;
-  --bg: #eef1f5;
+  --bg: #e2e7ee;
   --surface: #ffffff;
   --border: #d3d9e3;
   --border-strong: #a9b3c3;

@@ -95,7 +95,7 @@ describe('App', () => {
     await change('#menu', 'staff-pm');
     await change('#tab', 't1');
     el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
-    await TestBed.inject(HttpTestingController).verify();
+    TestBed.inject(HttpTestingController).verify();
     TestBed.tick();
 
     expect(el.querySelector('main .notice')?.textContent).toContain('Tumor Tracking');
@@ -105,8 +105,9 @@ describe('App', () => {
     localStorage.setItem('registry-auto-test.theme', 'light');
     const { el } = await render();
     expect(document.documentElement.dataset['theme']).toBe('light');
+    expect(el.querySelector('header .logo')?.getAttribute('alt')).toBe('LRG Patient Registry');
 
-    const toggle = el.querySelector<HTMLButtonElement>('.theme-toggle')!;
+    const toggle = el.querySelector<HTMLButtonElement>('header .theme-toggle')!;
     expect(toggle.textContent).toContain('Dark');
     toggle.click();
     TestBed.tick();

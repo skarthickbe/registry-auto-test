@@ -1,10 +1,42 @@
 :host {
   display: grid;
+  grid-template-areas:
+    'header header'
+    'sidebar content';
   grid-template-columns: minmax(340px, 400px) 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
 
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--primary);
+  color: #fff;
+}
+
+// The logo's blue lettering needs a light backdrop on the primary header.
+.logo {
+  display: block;
+  height: 44px;
+  width: auto;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.app-title {
+  padding-left: 16px;
+  border-left: 1px solid rgb(255 255 255 / 35%);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
 .sidebar {
+  grid-area: sidebar;
   padding: 28px 24px;
   border-right: 1px solid var(--border);
   background: var(--bg);
@@ -12,27 +44,25 @@
 }
 
 .content {
+  grid-area: content;
   min-width: 0;
   padding: 32px 40px;
 }
 
 .theme-toggle {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 1;
+  margin-left: auto;
   padding: 8px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid rgb(255 255 255 / 40%);
   border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    border-color: var(--border-strong);
+    background: rgb(255 255 255 / 22%);
   }
 }
 
@@ -99,7 +129,24 @@ code {
 
 @media (max-width: 800px) {
   :host {
+    grid-template-areas:
+      'header'
+      'sidebar'
+      'content';
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .app-header {
+    padding: 10px 16px;
+  }
+
+  .logo {
+    height: 34px;
+  }
+
+  .app-title {
+    display: none;
   }
 
   .sidebar {
