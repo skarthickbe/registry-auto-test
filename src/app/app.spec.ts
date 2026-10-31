@@ -56,34 +56,48 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    const change = async (selector: string, value: string | boolean) => {
-      const input = el.querySelector<HTMLInputElement>(selector)!;
-      if (typeof value === 'boolean') input.checked = value;
-      else input.value = value;
-      input.dispatchEvent(new Event('change'));
+    const settle = async () => {
       await fixture.whenStable();
       fixture.detectChanges();
     };
-    return { el, change };
+    const toggle = async (triggerId: string) => {
+      el.querySelector<HTMLButtonElement>(`#${triggerId}`)!.click();
+      await settle();
+    };
+    /** Opens a dropdown, reads its option labels, and closes it again. */
+    const optionLabels = async (triggerId: string) => {
+      await toggle(triggerId);
+      const labels = [...el.querySelectorAll('[role=option]')].map((o) => o.textContent?.trim());
+      await toggle(triggerId);
+      return labels;
+    };
+    const choose = async (triggerId: string, label: string) => {
+      await toggle(triggerId);
+      [...el.querySelectorAll<HTMLElement>('[role=option]')]
+        .find((o) => o.textContent?.trim() === label)!
+        .click();
+      await settle();
+    };
+    const tick = async (selector: string) => {
+      el.querySelector<HTMLInputElement>(selector)!.click();
+      await settle();
+    };
+    return { el, optionLabels, choose, tick };
   }
 
-  const optionLabels = (el: HTMLElement, selector: string) =>
-    [...el.querySelectorAll<HTMLOptionElement>(`${selector} option`)].map((o) =>
-      o.textContent?.trim(),
-    );
-
   it('lists only confirmed menus until "Show other menus" is ticked', async () => {
-    const { el, change } = await render();
-    expect(optionLabels(el, '#menu')).toEqual(['Select a menu…', 'Staff › Patient Management']);
+    const { optionLabels, tick } = await render();
+    expect(await optionLabels('menu')).toEqual(['Patient Management']);
 
-    await change('input[type=checkbox]', true);
-    expect(optionLabels(el, '#menu')).toContain('Other Routes › /wr');
+    await tick('input[type=checkbox]');
+    expect(await optionLabels('menu')).toContain('/wr');
   });
 
   it('shows the routes of the selected tab', async () => {
-    const { el, change } = await render();
-    await change('#menu', 'staff-pm');
-    await change('#tab', 't1');
+    const { el, choose } = await render();
+    await choose('menu', 'Patient Management');
+    expect(el.querySelector('#menu')?.textContent).toContain('Staff › Patient Management');
+    await choose('tab', 'Tumor Tracking');
 
     expect(el.querySelector('main h1')?.textContent).toContain('Tumor Tracking');
     expect(el.querySelector('main .crumb')?.textContent).toContain('My Diagnosis & Tumor Details');
@@ -91,9 +105,9 @@ describe('App', () => {
   });
 
   it('shows a notice when Generate Checklist is clicked', async () => {
-    const { el, change } = await render();
-    await change('#menu', 'staff-pm');
-    await change('#tab', 't1');
+    const { el, choose } = await render();
+    await choose('menu', 'Patient Management');
+    await choose('tab', 'Tumor Tracking');
     el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
     TestBed.inject(HttpTestingController).verify();
     TestBed.tick();

@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, output, signal } from '@angular/core';
 
+import { Select, SelectGroup } from '../../ui/select/select';
 import { ChildDepth, NavMenu, NavTab, TabSelection } from '../registry-nav.model';
 import { RegistryNavService } from '../registry-nav.service';
 
@@ -20,7 +21,7 @@ interface TabGroup {
 
 @Component({
   selector: 'app-nav-panel',
-  imports: [DatePipe],
+  imports: [DatePipe, Select],
   templateUrl: './nav-panel.html',
   styleUrl: './nav-panel.scss',
 })
@@ -31,12 +32,16 @@ export class NavPanel {
   readonly generateChecklist = output<TabSelection>();
   readonly unusedCodeReport = output<NavMenu | null>();
 
-  protected readonly depthOptions: Array<{ value: ChildDepth; label: string }> = [
-    { value: null, label: 'Auto (all child components)' },
-    { value: 0, label: '0 (route component only)' },
-    { value: 1, label: '1' },
-    { value: 2, label: '2' },
-    { value: 3, label: '3' },
+  protected readonly depthOptions: SelectGroup[] = [
+    {
+      options: [
+        { value: 'auto', label: 'Auto (all child components)' },
+        { value: '0', label: '0 (route component only)' },
+        { value: '1', label: '1' },
+        { value: '2', label: '2' },
+        { value: '3', label: '3' },
+      ],
+    },
   ];
 
   private readonly saved = readState();
@@ -56,6 +61,18 @@ export class NavPanel {
     return [...groups.entries()].map(([label, items]) => ({ label, menus: items }));
   });
 
+  /** The list shows "Patient Management" under its "Staff" heading; the closed dropdown shows the full label. */
+  protected readonly menuOptions = computed<SelectGroup[]>(() =>
+    this.menuGroups().map((g) => ({
+      label: g.label,
+      options: g.menus.map((m) => ({
+        value: m.id,
+        label: m.label.split(' › ').slice(1).join(' › ') || m.label,
+        selectedLabel: m.label,
+      })),
+    })),
+  );
+
   protected readonly selectedMenu = computed(() =>
     this.menuGroups()
       .flatMap((g) => g.menus)
@@ -72,6 +89,13 @@ export class NavPanel {
     }
     return groups;
   });
+
+  protected readonly tabOptions = computed<SelectGroup[]>(() =>
+    this.tabGroups().map((g) => ({
+      label: g.section,
+      options: g.tabs.map((t) => ({ value: t.id, label: t.title })),
+    })),
+  );
 
   protected readonly selectedTab = computed(() =>
     this.selectedMenu()?.tabs.find((t) => t.id === this.tabId()),

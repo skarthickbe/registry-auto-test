@@ -81,21 +81,6 @@
   }
 }
 
-.select {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #323a4b);
-  border-radius: 8px;
-  background: var(--page, #10141c);
-  color: var(--text, #e8ebf2);
-  font: inherit;
-
-  &:disabled {
-    opacity: 0.6;
-  }
-}
-
 .row {
   display: flex;
   align-items: center;

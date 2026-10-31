@@ -28,40 +28,27 @@
   <h2 class="section-title">Navigation</h2>
 
   <label class="field-label" for="menu">Menu</label>
-  <select id="menu" class="select" (change)="selectMenu($any($event.target).value)">
-    <option value="" disabled [selected]="!selectedMenu()">Select a menu…</option>
-    @for (group of menuGroups(); track group.label) {
-      <optgroup [label]="group.label">
-        @for (menu of group.menus; track menu.id) {
-          <option [value]="menu.id" [selected]="menu.id === menuId()">{{ menu.label }}</option>
-        }
-      </optgroup>
-    }
-  </select>
+  <app-select
+    triggerId="menu"
+    placeholder="Select a menu…"
+    searchPlaceholder="Search menus…"
+    [groups]="menuOptions()"
+    [value]="selectedMenu()?.id ?? ''"
+    (valueChange)="selectMenu($event)"
+  />
 
   <label class="field-label" for="tab">Tab</label>
   <div class="row">
-    <select
-      id="tab"
-      class="select grow"
+    <app-select
+      class="grow"
+      triggerId="tab"
+      placeholder="Select a tab…"
+      searchPlaceholder="Search tabs…"
+      [groups]="tabOptions()"
       [disabled]="!selectedMenu()"
-      (change)="tabId.set($any($event.target).value)"
-    >
-      <option value="" disabled [selected]="!selectedTab()">Select a tab…</option>
-      @for (group of tabGroups(); track $index) {
-        @if (group.section) {
-          <optgroup [label]="group.section">
-            @for (tab of group.tabs; track tab.id) {
-              <option [value]="tab.id" [selected]="tab.id === tabId()">{{ tab.title }}</option>
-            }
-          </optgroup>
-        } @else {
-          @for (tab of group.tabs; track tab.id) {
-            <option [value]="tab.id" [selected]="tab.id === tabId()">{{ tab.title }}</option>
-          }
-        }
-      }
-    </select>
+      [value]="selectedTab()?.id ?? ''"
+      (valueChange)="tabId.set($event)"
+    />
     <button type="button" class="btn" [disabled]="registry.loading()" (click)="registry.load()">
       {{ registry.loading() ? 'Loading…' : 'Refresh' }}
     </button>
@@ -81,13 +68,13 @@
   </label>
 
   <label class="field-label" for="depth">Child depth</label>
-  <select id="depth" class="select" (change)="selectDepth($any($event.target).value)">
-    @for (opt of depthOptions; track opt.label) {
-      <option [value]="depthKey(opt.value)" [selected]="opt.value === childDepth()">
-        {{ opt.label }}
-      </option>
-    }
-  </select>
+  <app-select
+    triggerId="depth"
+    [groups]="depthOptions"
+    [searchable]="false"
+    [value]="depthKey(childDepth())"
+    (valueChange)="selectDepth($event)"
+  />
 </section>
 
 <section class="section">

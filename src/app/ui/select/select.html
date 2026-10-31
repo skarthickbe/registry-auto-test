@@ -1,0 +1,71 @@
+<button
+  #trigger
+  type="button"
+  class="trigger"
+  role="combobox"
+  aria-haspopup="listbox"
+  [id]="triggerId()"
+  [disabled]="disabled()"
+  [attr.aria-expanded]="open()"
+  [attr.aria-controls]="listId"
+  (click)="toggle()"
+  (keydown)="onTriggerKey($event)"
+>
+  <span class="value" [class.placeholder]="!selected()">
+    {{ selected() ? (selected()!.selectedLabel ?? selected()!.label) : placeholder() }}
+  </span>
+  <svg class="chevron" viewBox="0 0 20 20" aria-hidden="true">
+    <path d="M5 7.5l5 5 5-5" />
+  </svg>
+</button>
+
+@if (open()) {
+  <div class="popup" (keydown)="onPopupKey($event)">
+    @if (searchable()) {
+      <div class="search">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="9" cy="9" r="5.5" />
+          <path d="M13.2 13.2L17 17" />
+        </svg>
+        <input
+          #search
+          type="text"
+          autocomplete="off"
+          [placeholder]="searchPlaceholder()"
+          [attr.aria-label]="searchPlaceholder()"
+          [attr.aria-controls]="listId"
+          [attr.aria-activedescendant]="flat().length ? listId + '-' + activeIndex() : null"
+          [value]="query()"
+          (input)="onQuery($any($event.target).value)"
+        />
+      </div>
+    }
+    <ul #list class="list" role="listbox" tabindex="-1" [id]="listId">
+      @for (group of filtered(); track $index) {
+        @if (group.label) {
+          <li class="group-label" role="presentation">{{ group.label }}</li>
+        }
+        @for (option of group.options; track option.value) {
+          @let i = indexOf(option);
+          <li
+            class="option"
+            role="option"
+            [id]="listId + '-' + i"
+            [class.active]="i === activeIndex()"
+            [class.selected]="option.value === value()"
+            [attr.aria-selected]="option.value === value()"
+            (click)="choose(option)"
+            (mouseenter)="activeIndex.set(i)"
+          >
+            <svg class="tick" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M4.5 10.5l3.5 3.5 7.5-8" />
+            </svg>
+            <span>{{ option.label }}</span>
+          </li>
+        }
+      } @empty {
+        <li class="empty" role="presentation">No matches</li>
+      }
+    </ul>
+  </div>
+}
