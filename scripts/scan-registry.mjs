@@ -360,6 +360,155 @@ function findRootRoutes(index, resolveArray, exportedRoutes) {
 }
 
 // ---------------------------------------------------------------------------
+// Component details: the form fields, validators, buttons and lists a checklist is built from
+// ---------------------------------------------------------------------------
+
+function loadI18n() {
+  if (!config.i18nPath) return {};
+  try {
+    return JSON.parse(fs.readFileSync(path.resolve(APP, config.i18nPath), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+const translate = (expr, i18n) => [...expr.matchAll(/\bt\(\s*'([^']+)'/g)].map((m) => i18n[m[1]] ?? m[1]);
+
+/** Visible text of a template fragment: t('key') in English, other bindings and tags dropped. */
+function templateText(html, i18n) {
+  return html
+    .replace(/\{\{([\s\S]*?)\}\}/g, (_, expr) => ` ${translate(expr, i18n).join(' / ')} `)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** An attribute's text: plain `name="x"`, or the English of `[name]="t('key')"`. */
+function attrText(tag, name, i18n) {
+  const m = new RegExp(`\\s(\\[?)${name}\\]?\\s*=\\s*"([^"]*)"`, 'i').exec(tag);
+  if (!m) return undefined;
+  if (!m[1]) return m[2];
+  const keys = translate(m[2], i18n);
+  return keys.length ? keys.join(' ') : undefined;
+}
+
+const attrValue = (tag, name) => new RegExp(`\\s\\[?${name}\\]?\\s*=\\s*"([^"]*)"`, 'i').exec(tag)?.[1];
+const lineAt = (text, index) => text.slice(0, index).split('\n').length;
+
+function extractFields(html, i18n) {
+  const fields = [];
+  const seen = new Set();
+  const add = (field) => {
+    const key = `${field.name}|${field.label}`;
+    if (field.name && !seen.has(key)) {
+      seen.add(key);
+      fields.push(field);
+    }
+  };
+  for (const m of html.matchAll(/<mat-form-field\b[\s\S]*?<\/mat-form-field>/g)) {
+    const block = m[0];
+    const control = [...block.matchAll(/<(input|textarea|mat-select)\b[^>]*>/g)].find((t) => /formControlName|\[formControl\]|ngModel/.test(t[0]));
+    if (!control) continue;
+    const tag = control[0];
+    const name = attrValue(tag, 'formControlName') ?? attrValue(tag, 'formControl') ?? /\[\(ngModel\)\]\s*=\s*"([^"]+)"/.exec(tag)?.[1];
+    let kind = control[1] === 'mat-select' ? 'select' : control[1];
+    if (kind === 'input') kind = /matDatepicker/.test(tag) ? 'date' : (attrValue(tag, 'type') ?? 'text');
+    add({
+      name,
+      label: templateText(/<mat-label\b[^>]*>([\s\S]*?)<\/mat-label>/.exec(block)?.[1] ?? '', i18n) || attrText(tag, 'placeholder', i18n) || name,
+      kind,
+      maxLength: attrValue(tag, 'maxlength'),
+      required: /\srequired(?=[\s>/=])/.test(tag) || /\[required\]\s*=\s*"true"/.test(tag),
+      errors: [...block.matchAll(/<mat-error\b[^>]*>([\s\S]*?)<\/mat-error>/g)].map((e) => templateText(e[1], i18n)).filter(Boolean),
+      line: lineAt(html, m.index),
+    });
+  }
+  for (const m of html.matchAll(/<(mat-checkbox|mat-slide-toggle|mat-radio-group)\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
+    const name = attrValue(m[2], 'formControlName');
+    if (!name) continue;
+    const radio = m[1] === 'mat-radio-group';
+    add({
+      name,
+      label: (radio ? attrText(m[2], 'aria-label', i18n) : templateText(m[3], i18n)) || name,
+      kind: radio ? 'radio' : m[1] === 'mat-checkbox' ? 'checkbox' : 'toggle',
+      options: radio ? [...m[3].matchAll(/<mat-radio-button\b[^>]*>([\s\S]*?)<\/mat-radio-button>/g)].map((o) => templateText(o[1], i18n)).filter(Boolean) : undefined,
+      required: false,
+      errors: [],
+      line: lineAt(html, m.index),
+    });
+  }
+  return fields;
+}
+
+/** Validators per form control: `name: ['', [Validators.required]]`, `new FormControl('', ...)`, and conditional setValidators(). */
+function extractValidators(cls) {
+  const names = (node) => [...node.getText().matchAll(/Validators\.(\w+)(?:\(([^)]*)\))?/g)].map((m) => (m[2] ? `${m[1]}(${m[2].trim()})` : m[1]));
+  const always = {};
+  const conditional = {};
+  const visit = (n) => {
+    if (ts.isPropertyAssignment(n)) {
+      const name = propName(n.name);
+      const init = n.initializer;
+      const rules =
+        ts.isArrayLiteralExpression(init) && init.elements.length > 1 ? names(init.elements[1])
+        : ts.isNewExpression(init) && init.expression.getText() === 'FormControl' && init.arguments?.[1] ? names(init.arguments[1])
+        : [];
+      if (name && rules.length) always[name] = rules;
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && /^(set|add)Validators$/.test(n.expression.name.text) && n.arguments[0]) {
+      const target = /(?:get\(\s*['"]|controls\[\s*['"]|controls\.)([\w.]+)/.exec(n.expression.expression.getText())?.[1];
+      let cond;
+      for (let p = n.parent; p && !cond; p = p.parent) if (ts.isIfStatement(p)) cond = p.expression.getText().replace(/\s+/g, ' ').slice(0, 120);
+      if (target) conditional[target] = { rules: names(n.arguments[0]), when: cond };
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(cls);
+  return { always, conditional };
+}
+
+function extractButtons(html, i18n) {
+  const buttons = [];
+  for (const m of html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)) {
+    const tag = m[1];
+    const icon = /<mat-icon\b([^>]*)>([\s\S]*?)<\/mat-icon>/.exec(m[2]);
+    const text =
+      templateText(m[2].replace(/<mat-icon\b[\s\S]*?<\/mat-icon>/g, ''), i18n) ||
+      attrText(tag, 'matTooltip', i18n) ||
+      attrText(tag, 'aria-label', i18n) ||
+      (icon && (attrValue(icon[1], 'svgIcon') ?? icon[2].trim()));
+    const click = /\(click\)\s*=\s*"([^"]*)"/.exec(tag)?.[1];
+    const submit = /type\s*=\s*"submit"/.test(tag);
+    if (!text && !click && !submit) continue;
+    buttons.push({ text: text || '(icon button)', click, disabledWhen: attrValue(tag, 'disabled'), submit, line: lineAt(html, m.index) });
+  }
+  return buttons;
+}
+
+function extractDetails(html, cls, i18n) {
+  const fields = extractFields(html, i18n);
+  const { always, conditional } = extractValidators(cls);
+  for (const f of fields) {
+    f.validators = always[f.name] ?? [];
+    if (f.validators.includes('required')) f.required = true;
+    const when = conditional[f.name];
+    if (when) {
+      f.conditionalValidators = when.rules;
+      f.requiredWhen = when.rules.includes('required') ? (when.when ?? 'a condition in the component') : undefined;
+    }
+  }
+  return {
+    fields,
+    buttons: extractButtons(html, i18n),
+    tables: (html.match(/<table\b[^>]*mat-table|<mat-table\b/g) ?? []).length,
+    repeats: (html.match(/@for\s*\(|\*ngFor\s*=/g) ?? []).length,
+    paginator: /<mat-paginator\b/.test(html),
+    sort: /\bmatSort\b/.test(html),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Component tree: which project components each component renders or opens
 // ---------------------------------------------------------------------------
 
@@ -377,6 +526,7 @@ function selectorTargets(selector) {
 }
 
 function discoverComponents(index) {
+  const i18n = loadI18n();
   const found = [];
   for (const file of walkFiles(index.srcDir)) {
     if (EXCLUDE_COMPONENT_DIRS.some((dir) => file.startsWith(dir))) continue;
@@ -391,14 +541,17 @@ function discoverComponents(index) {
       const templateUrl = getProperty(meta, 'templateUrl');
       const inline = getProperty(meta, 'template');
       let template = '';
+      let templateFile;
       if (templateUrl) {
         try {
-          template = fs.readFileSync(path.resolve(path.dirname(file), index.evalString(templateUrl, file)), 'utf8');
+          templateFile = path.resolve(path.dirname(file), index.evalString(templateUrl, file));
+          template = fs.readFileSync(templateFile, 'utf8');
         } catch {
           // Missing template file: the component simply has no template children.
         }
       } else if (inline) {
         template = index.evalString(inline, file);
+        templateFile = file;
       }
       found.push({
         key: `${rel(file)}#${cls.name.text}`,
@@ -406,7 +559,9 @@ function discoverComponents(index) {
         cls,
         name: cls.name.text,
         selector: selectorExpr ? index.evalString(selectorExpr, file) : undefined,
-        template: template.replace(/<!--[\s\S]*?-->/g, ''),
+        templateFile,
+        // Blank out comments but keep their line breaks, so template line numbers stay right.
+        template: template.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, '')),
       });
     }
   }
@@ -455,6 +610,8 @@ function discoverComponents(index) {
       selector: c.selector,
       children: [...children],
       dialogs: [...dialogs].filter((k) => !children.has(k)),
+      template: c.templateFile ? rel(c.templateFile) : undefined,
+      details: extractDetails(c.template, c.cls, i18n),
     };
   }
   return components;

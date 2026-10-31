@@ -3,7 +3,16 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { App } from './app';
-import { RegistryNav } from './registry/registry-nav.model';
+import { ComponentDetails, RegistryNav } from './registry/registry-nav.model';
+
+const NO_DETAILS: ComponentDetails = {
+  fields: [],
+  buttons: [],
+  tables: 0,
+  repeats: 0,
+  paginator: false,
+  sort: false,
+};
 
 const NAV: RegistryNav = {
   generatedAt: '2026-10-31T00:00:00.000Z',
@@ -25,24 +34,28 @@ const NAV: RegistryNav = {
       file: 'tumor-tracking.ts',
       children: ['viewer.ts#TextInputViewerComponent'],
       dialogs: ['add-tumor.ts#AddTumorComponent'],
+      details: NO_DETAILS,
     },
     'viewer.ts#TextInputViewerComponent': {
       name: 'TextInputViewerComponent',
       file: 'viewer.ts',
       children: [],
       dialogs: [],
+      details: NO_DETAILS,
     },
     'add-tumor.ts#AddTumorComponent': {
       name: 'AddTumorComponent',
       file: 'add-tumor.ts',
       children: ['upload.ts#UploadWidgetComponent'],
       dialogs: [],
+      details: NO_DETAILS,
     },
     'upload.ts#UploadWidgetComponent': {
       name: 'UploadWidgetComponent',
       file: 'upload.ts',
       children: [],
       dialogs: [],
+      details: NO_DETAILS,
     },
   },
   menus: [

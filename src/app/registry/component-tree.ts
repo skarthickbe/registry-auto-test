@@ -6,6 +6,8 @@ export interface ComponentRow {
   /** 0 for the route component, 1 for its direct children, … */
   level: number;
   viaDialog: boolean;
+  /** Key of the component that renders or opens this one; absent for route components. */
+  parent?: string;
 }
 
 export interface ComponentTree {
@@ -50,9 +52,9 @@ export function buildComponentTree(
   }
 
   const rows: ComponentRow[] = [];
-  const visit = (key: string, viaDialog: boolean): void => {
-    rows.push({ key, component: components[key], level: levelOf.get(key)!, viaDialog });
-    for (const child of childrenOf.get(key) ?? []) visit(child.key, child.viaDialog);
+  const visit = (key: string, viaDialog: boolean, parent?: string): void => {
+    rows.push({ key, component: components[key], level: levelOf.get(key)!, viaDialog, parent });
+    for (const child of childrenOf.get(key) ?? []) visit(child.key, child.viaDialog, key);
   };
   roots.forEach((k) => visit(k, false));
 

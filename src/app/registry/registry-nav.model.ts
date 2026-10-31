@@ -17,6 +17,52 @@ export interface RegistryComponent {
   children: string[];
   /** Components opened with `.open(X)` (MatDialog, bottom sheet, …). */
   dialogs: string[];
+  /** Template file (the component file itself for inline templates). */
+  template?: string;
+  details: ComponentDetails;
+}
+
+/** What a component's template and class contain, as read by the scanner. */
+export interface ComponentDetails {
+  fields: FormField[];
+  buttons: UiButton[];
+  /** Number of mat-table tables. */
+  tables: number;
+  /** Number of @for / *ngFor repeats. */
+  repeats: number;
+  paginator: boolean;
+  sort: boolean;
+}
+
+export interface FormField {
+  /** formControlName (or formControl / ngModel binding). */
+  name: string;
+  label: string;
+  kind: 'text' | 'date' | 'select' | 'textarea' | 'checkbox' | 'toggle' | 'radio' | (string & {});
+  maxLength?: string;
+  required: boolean;
+  /** The component condition under which setValidators() makes the field required. */
+  requiredWhen?: string;
+  /** e.g. ['required', 'maxLength(50)', 'pattern(...)']. */
+  validators?: string[];
+  conditionalValidators?: string[];
+  /** <mat-error> texts, in English. */
+  errors: string[];
+  /** Radio button labels. */
+  options?: string[];
+  /** Line in the template file. */
+  line: number;
+}
+
+export interface UiButton {
+  /** Button text, or its tooltip / aria-label / icon when it has no text. */
+  text: string;
+  /** The (click) handler expression. */
+  click?: string;
+  /** The [disabled] condition. */
+  disabledWhen?: string;
+  submit: boolean;
+  line: number;
 }
 
 export interface RegistryRoute {

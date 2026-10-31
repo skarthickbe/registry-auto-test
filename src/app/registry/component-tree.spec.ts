@@ -10,6 +10,7 @@ const comp = (
   file: `${name}.ts`,
   children,
   dialogs,
+  details: { fields: [], buttons: [], tables: 0, repeats: 0, paginator: false, sort: false },
 });
 
 // Page → [Card, Form] + dialog Edit; Form → [Card, Input]; Edit → [Form, Page] (cycle back)
