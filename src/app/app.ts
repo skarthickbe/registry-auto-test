@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal } from '@angular/core';
 
 import { NavPanel } from './registry/nav-panel/nav-panel';
 import { NavMenu, TabSelection } from './registry/registry-nav.model';
@@ -33,6 +33,16 @@ export class App {
     return depth === null ? rows : rows.filter((r) => r.level <= depth);
   });
 
+  /** Components ticked for the checklist; every component is ticked again when the tab changes. */
+  protected readonly checkedKeys = linkedSignal(
+    () => new Set(this.componentTree()?.rows.map((r) => r.key) ?? []),
+  );
+
+  /** The visible, ticked components: what Generate Checklist works on. */
+  protected readonly checkedComponents = computed(() =>
+    this.visibleComponents().filter((r) => this.checkedKeys().has(r.key)),
+  );
+
   constructor() {
     const root = inject(DOCUMENT).documentElement;
     effect(() => {
@@ -54,8 +64,34 @@ export class App {
     this.notice.set(null);
   }
 
+  protected toggleComponent(key: string, checked: boolean): void {
+    this.checkedKeys.update((keys) => {
+      const next = new Set(keys);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
+
+  protected toggleAllComponents(checked: boolean): void {
+    const visible = this.visibleComponents().map((r) => r.key);
+    this.checkedKeys.update((keys) => {
+      const next = new Set(keys);
+      for (const key of visible) {
+        if (checked) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+  }
+
   protected onGenerate(selection: TabSelection): void {
-    this.notice.set(`Checklist generation for "${selection.tab.title}" is not built yet.`);
+    const count = this.checkedComponents().length;
+    this.notice.set(
+      count
+        ? `Checklist for "${selection.tab.title}": ${count} component${count === 1 ? '' : 's'} selected. Generation is not built yet.`
+        : 'Select at least one component to generate a checklist.',
+    );
   }
 
   protected onUnusedCode(menu: NavMenu | null): void {

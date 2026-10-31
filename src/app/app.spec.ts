@@ -169,6 +169,34 @@ describe('App', () => {
     expect(el.querySelector('main')!.textContent).toContain('showing up to level 1');
   });
 
+  it('generates only for the ticked components', async () => {
+    const { el, choose, tick } = await render();
+    await choose('menu', 'Patient Management');
+    await choose('tab', 'Tumor Tracking');
+    const toolbar = () => el.querySelector('.tree-toolbar')!.textContent!;
+    const selectAll = () => el.querySelector<HTMLInputElement>('.tree-toolbar input')!;
+    expect(toolbar()).toContain('4 of 4 selected');
+
+    // Untick AddTumorComponent (the third row)
+    await tick('.tree li:nth-child(3) input');
+    expect(toolbar()).toContain('3 of 4 selected');
+    expect(selectAll().indeterminate).toBe(true);
+
+    el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
+    TestBed.tick();
+    expect(el.querySelector('main .notice')?.textContent).toContain('3 components selected');
+
+    await tick('.tree-toolbar input');
+    expect(toolbar()).toContain('4 of 4 selected');
+    await tick('.tree-toolbar input');
+    expect(toolbar()).toContain('0 of 4 selected');
+    el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
+    TestBed.tick();
+    expect(el.querySelector('main .notice')?.textContent).toContain(
+      'Select at least one component',
+    );
+  });
+
   it('switches and remembers the theme', async () => {
     localStorage.setItem('registry-auto-test.theme', 'light');
     const { el } = await render();

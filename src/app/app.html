@@ -74,17 +74,40 @@
             · showing up to level {{ sel.childDepth }}
           }
         </p>
+        @let checked = checkedComponents().length;
+        @let visible = visibleComponents().length;
+        <div class="tree-toolbar">
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="checked === visible"
+              [indeterminate]="checked > 0 && checked < visible"
+              (change)="toggleAllComponents($any($event.target).checked)"
+            />
+            Select all
+          </label>
+          <span class="muted small">{{ checked }} of {{ visible }} selected for the checklist</span>
+        </div>
         <ul class="tree">
           @for (row of visibleComponents(); track row.key) {
-            <li [style.padding-left.px]="row.level * 24 + 12">
-              <div class="tree-line">
-                <span class="level">L{{ row.level }}</span>
-                <span class="name">{{ row.component.name }}</span>
-                @if (row.viaDialog) {
-                  <span class="chip">dialog</span>
-                }
-              </div>
-              <div class="muted small">{{ row.component.file }}</div>
+            <li [class.unchecked]="!checkedKeys().has(row.key)">
+              <label class="tree-item" [style.padding-left.px]="row.level * 24 + 12">
+                <input
+                  type="checkbox"
+                  [checked]="checkedKeys().has(row.key)"
+                  (change)="toggleComponent(row.key, $any($event.target).checked)"
+                />
+                <span class="tree-text">
+                  <span class="tree-line">
+                    <span class="level">L{{ row.level }}</span>
+                    <span class="name">{{ row.component.name }}</span>
+                    @if (row.viaDialog) {
+                      <span class="chip">dialog</span>
+                    }
+                  </span>
+                  <span class="muted small file">{{ row.component.file }}</span>
+                </span>
+              </label>
             </li>
           }
         </ul>
