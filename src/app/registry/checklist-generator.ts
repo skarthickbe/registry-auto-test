@@ -3,6 +3,7 @@ import { FormField, RegistryComponent, UiButton } from './registry-nav.model';
 
 export type Priority = 'High' | 'Medium' | 'Low';
 export type Verification = 'Verified from source' | 'Needs verification';
+export type Status = 'Not tested' | 'Pass' | 'Fail' | 'Blocked';
 export type Category =
   'Navigation' | 'Field validation' | 'Field input' | 'Buttons' | 'Dialogs' | 'Lists';
 

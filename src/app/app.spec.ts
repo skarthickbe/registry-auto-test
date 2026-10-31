@@ -122,7 +122,11 @@ describe('App', () => {
       el.querySelector<HTMLInputElement>(selector)!.click();
       await settle();
     };
-    return { el, optionLabels, choose, tick };
+    const click = async (selector: string) => {
+      el.querySelector<HTMLButtonElement>(selector)!.click();
+      await settle();
+    };
+    return { el, optionLabels, choose, tick, click };
   }
 
   it('lists only confirmed menus until "Show other menus" is ticked', async () => {
@@ -144,15 +148,27 @@ describe('App', () => {
     expect(el.querySelector('main table')?.textContent).toContain('/staff/patient/details/:id/104');
   });
 
-  it('shows a notice when Generate Checklist is clicked', async () => {
-    const { el, choose } = await render();
+  it('generates a checklist, switches to it and keeps results', async () => {
+    const { el, choose, click } = await render();
     await choose('menu', 'Patient Management');
     await choose('tab', 'Tumor Tracking');
-    el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
-    TestBed.inject(HttpTestingController).verify();
-    TestBed.tick();
+    expect(el.querySelector<HTMLButtonElement>('.view-tab:nth-child(2)')!.disabled).toBe(true);
 
-    expect(el.querySelector('main .notice')?.textContent).toContain('Tumor Tracking');
+    await click('.btn.primary');
+    const titles = () => [...el.querySelectorAll('.cases .title')].map((t) => t.textContent);
+    expect(el.querySelector('.view-tab.on')?.textContent).toContain('Checklist');
+    expect(el.querySelector('.view-tab .badge')?.textContent).toBe('2');
+    expect(titles()).toEqual(['Open the Tumor Tracking page', 'Open the AddTumorComponent dialog']);
+
+    await click('.cases .case:first-child .status-btn[data-status="Pass"]');
+    expect(el.querySelector('.count.pass strong')?.textContent).toBe('1');
+
+    await click('.view-tab:nth-child(1)');
+    expect(el.querySelector('.tree')).toBeTruthy();
+    await click('.view-tab:nth-child(2)');
+    expect(
+      el.querySelector('.cases .case:first-child .status-btn.on')?.getAttribute('data-status'),
+    ).toBe('Pass');
   });
 
   it('previews the component tree and offers one depth per level', async () => {
@@ -183,28 +199,27 @@ describe('App', () => {
   });
 
   it('generates only for the ticked components', async () => {
-    const { el, choose, tick } = await render();
+    const { el, choose, tick, click } = await render();
     await choose('menu', 'Patient Management');
     await choose('tab', 'Tumor Tracking');
     const toolbar = () => el.querySelector('.tree-toolbar')!.textContent!;
     const selectAll = () => el.querySelector<HTMLInputElement>('.tree-toolbar input')!;
     expect(toolbar()).toContain('4 of 4 selected');
 
-    // Untick AddTumorComponent (the third row)
+    // Untick AddTumorComponent (the third row): its dialog case disappears.
     await tick('.tree li:nth-child(3) input');
     expect(toolbar()).toContain('3 of 4 selected');
     expect(selectAll().indeterminate).toBe(true);
+    await click('.btn.primary');
+    expect([...el.querySelectorAll('.cases .title')].map((t) => t.textContent)).toEqual([
+      'Open the Tumor Tracking page',
+    ]);
 
-    el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
-    TestBed.tick();
-    expect(el.querySelector('main .notice')?.textContent).toContain('3 components selected');
-
+    await click('.view-tab:nth-child(1)');
     await tick('.tree-toolbar input');
-    expect(toolbar()).toContain('4 of 4 selected');
     await tick('.tree-toolbar input');
     expect(toolbar()).toContain('0 of 4 selected');
-    el.querySelector<HTMLButtonElement>('.btn.primary')!.click();
-    TestBed.tick();
+    await click('.btn.primary');
     expect(el.querySelector('main .notice')?.textContent).toContain(
       'Select at least one component',
     );

@@ -103,7 +103,7 @@ export class NavPanel {
       {
         value: 'auto',
         label: counts.length
-          ? `Auto · ${counts.length - 1} levels · ${componentCount(total)}`
+          ? `Auto · ${counts.length - 1} level${counts.length === 2 ? '' : 's'} · ${componentCount(total)}`
           : 'Auto (all child components)',
       },
     ];

@@ -32,85 +32,124 @@
     }
     <p class="muted small">{{ sel.tab.note }}</p>
 
-    <h2>Routes</h2>
-    @let routes = registry.routes(sel.tab.routes);
-    @if (routes.length) {
-      <table>
-        <thead>
-          <tr>
-            <th>Path</th>
-            <th>Component</th>
-            <th>Defined in</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of routes; track r.id) {
-            <tr>
-              <td>
-                <code>{{ r.path }}</code>
-              </td>
-              <td>
-                {{ r.component }}
-                @if (r.componentFile) {
-                  <div class="muted small">{{ r.componentFile }}</div>
-                }
-              </td>
-              <td class="muted small">{{ r.definedIn.file }}:{{ r.definedIn.line }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    } @else {
-      <p class="muted">No Angular route matches this tab.</p>
-    }
+    <div class="views" role="tablist" aria-label="Tab details">
+      <button
+        type="button"
+        role="tab"
+        class="view-tab"
+        [class.on]="view() === 'components'"
+        [attr.aria-selected]="view() === 'components'"
+        (click)="view.set('components')"
+      >
+        Components
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="view-tab"
+        [class.on]="view() === 'checklist'"
+        [attr.aria-selected]="view() === 'checklist'"
+        [disabled]="!checklist()"
+        [title]="checklist() ? '' : 'Click Generate Checklist first'"
+        (click)="view.set('checklist')"
+      >
+        Checklist
+        @if (checklist(); as cases) {
+          <span class="badge">{{ cases.length }}</span>
+        }
+      </button>
+    </div>
 
-    @if (componentTree(); as tree) {
-      @if (tree.rows.length) {
-        <h2>Components</h2>
-        <p class="muted small">
-          {{ visibleComponents().length }} of {{ tree.rows.length }} components ·
-          {{ tree.levelCounts.length - 1 }} levels
-          @if (sel.childDepth !== null) {
-            · showing up to level {{ sel.childDepth }}
-          }
-        </p>
-        @let checked = checkedComponents().length;
-        @let visible = visibleComponents().length;
-        <div class="tree-toolbar">
-          <label class="check">
-            <input
-              type="checkbox"
-              [checked]="checked === visible"
-              [indeterminate]="checked > 0 && checked < visible"
-              (change)="toggleAllComponents($any($event.target).checked)"
-            />
-            Select all
-          </label>
-          <span class="muted small">{{ checked }} of {{ visible }} selected for the checklist</span>
-        </div>
-        <ul class="tree">
-          @for (row of visibleComponents(); track row.key) {
-            <li [class.unchecked]="!checkedKeys().has(row.key)">
-              <label class="tree-item" [style.padding-left.px]="row.level * 24 + 12">
-                <input
-                  type="checkbox"
-                  [checked]="checkedKeys().has(row.key)"
-                  (change)="toggleComponent(row.key, $any($event.target).checked)"
-                />
-                <span class="tree-text">
-                  <span class="tree-line">
-                    <span class="level">L{{ row.level }}</span>
-                    <span class="name">{{ row.component.name }}</span>
-                    @if (row.viaDialog) {
-                      <span class="chip">dialog</span>
-                    }
+    @if (view() === 'checklist' && checklist(); as cases) {
+      <app-checklist-view
+        [cases]="cases"
+        [storageKey]="selectionKey()"
+        [title]="sel.tab.title"
+        [subtitle]="sel.menu.label"
+      />
+    } @else {
+      <h2>Routes</h2>
+      @let routes = registry.routes(sel.tab.routes);
+      @if (routes.length) {
+        <table>
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th>Component</th>
+              <th>Defined in</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of routes; track r.id) {
+              <tr>
+                <td>
+                  <code>{{ r.path }}</code>
+                </td>
+                <td>
+                  {{ r.component }}
+                  @if (r.componentFile) {
+                    <div class="muted small">{{ r.componentFile }}</div>
+                  }
+                </td>
+                <td class="muted small">{{ r.definedIn.file }}:{{ r.definedIn.line }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="muted">No Angular route matches this tab.</p>
+      }
+
+      @if (componentTree(); as tree) {
+        @if (tree.rows.length) {
+          <h2>Components</h2>
+          <p class="muted small">
+            {{ visibleComponents().length }} of {{ tree.rows.length }} components ·
+            {{ tree.levelCounts.length - 1 }} levels
+            @if (sel.childDepth !== null) {
+              · showing up to level {{ sel.childDepth }}
+            }
+          </p>
+          @let checked = checkedComponents().length;
+          @let visible = visibleComponents().length;
+          <div class="tree-toolbar">
+            <label class="check">
+              <input
+                type="checkbox"
+                [checked]="checked === visible"
+                [indeterminate]="checked > 0 && checked < visible"
+                (change)="toggleAllComponents($any($event.target).checked)"
+              />
+              Select all
+            </label>
+            <span class="muted small"
+              >{{ checked }} of {{ visible }} selected for the checklist</span
+            >
+          </div>
+          <ul class="tree">
+            @for (row of visibleComponents(); track row.key) {
+              <li [class.unchecked]="!checkedKeys().has(row.key)">
+                <label class="tree-item" [style.padding-left.px]="row.level * 24 + 12">
+                  <input
+                    type="checkbox"
+                    [checked]="checkedKeys().has(row.key)"
+                    (change)="toggleComponent(row.key, $any($event.target).checked)"
+                  />
+                  <span class="tree-text">
+                    <span class="tree-line">
+                      <span class="level">L{{ row.level }}</span>
+                      <span class="name">{{ row.component.name }}</span>
+                      @if (row.viaDialog) {
+                        <span class="chip">dialog</span>
+                      }
+                    </span>
+                    <span class="muted small file">{{ row.component.file }}</span>
                   </span>
-                  <span class="muted small file">{{ row.component.file }}</span>
-                </span>
-              </label>
-            </li>
-          }
-        </ul>
+                </label>
+              </li>
+            }
+          </ul>
+        }
       }
     }
   } @else {

@@ -1,17 +1,20 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, effect, inject, linkedSignal, signal } from '@angular/core';
 
+import { TestCase, generateChecklist } from './registry/checklist-generator';
+import { ChecklistView } from './registry/checklist-view/checklist-view';
 import { NavPanel } from './registry/nav-panel/nav-panel';
 import { NavMenu, TabSelection } from './registry/registry-nav.model';
 import { RegistryNavService } from './registry/registry-nav.service';
 
 type Theme = 'light' | 'dark';
+type View = 'components' | 'checklist';
 
 const THEME_KEY = 'registry-auto-test.theme';
 
 @Component({
   selector: 'app-root',
-  imports: [NavPanel],
+  imports: [NavPanel, ChecklistView],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -20,6 +23,20 @@ export class App {
   protected readonly selection = signal<TabSelection | null>(null);
   protected readonly notice = signal<string | null>(null);
   protected readonly theme = signal<Theme>(initialTheme());
+
+  /** Identifies the selected tab; a new tab starts on the Components view with no checklist. */
+  protected readonly selectionKey = computed(() => {
+    const sel = this.selection();
+    return sel ? `${sel.menu.id}|${sel.tab.id}` : '';
+  });
+  protected readonly view = linkedSignal<string, View>({
+    source: this.selectionKey,
+    computation: () => 'components',
+  });
+  protected readonly checklist = linkedSignal<string, TestCase[] | null>({
+    source: this.selectionKey,
+    computation: () => null,
+  });
 
   protected readonly componentTree = computed(() => {
     const sel = this.selection();
@@ -86,12 +103,20 @@ export class App {
   }
 
   protected onGenerate(selection: TabSelection): void {
-    const count = this.checkedComponents().length;
-    this.notice.set(
-      count
-        ? `Checklist for "${selection.tab.title}": ${count} component${count === 1 ? '' : 's'} selected. Generation is not built yet.`
-        : 'Select at least one component to generate a checklist.',
+    const rows = this.checkedComponents();
+    if (!rows.length) {
+      this.notice.set('Select at least one component to generate a checklist.');
+      return;
+    }
+    this.notice.set(null);
+    this.checklist.set(
+      generateChecklist(rows, {
+        tabTitle: selection.tab.title,
+        routePath: this.registry.routes(selection.tab.routes)[0]?.path,
+        components: this.registry.nav()?.components ?? {},
+      }),
     );
+    this.view.set('checklist');
   }
 
   protected onUnusedCode(menu: NavMenu | null): void {

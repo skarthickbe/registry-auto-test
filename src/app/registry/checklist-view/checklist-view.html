@@ -1,0 +1,144 @@
+@let total = cases().length;
+<div class="summary">
+  <div class="counts">
+    <span class="count">
+      <strong>{{ counts()['Not tested'] }}</strong>
+      Not tested
+    </span>
+    <span class="count pass">
+      <strong>{{ counts().Pass }}</strong>
+      Pass
+    </span>
+    <span class="count fail">
+      <strong>{{ counts().Fail }}</strong>
+      Fail
+    </span>
+    <span class="count blocked">
+      <strong>{{ counts().Blocked }}</strong>
+      Blocked
+    </span>
+  </div>
+  <div class="progress" [attr.aria-label]="done() + '% tested'">
+    <div class="bar pass" [style.width.%]="total ? (counts().Pass / total) * 100 : 0"></div>
+    <div class="bar fail" [style.width.%]="total ? (counts().Fail / total) * 100 : 0"></div>
+    <div class="bar blocked" [style.width.%]="total ? (counts().Blocked / total) * 100 : 0"></div>
+  </div>
+  <span class="muted small">{{ done() }}% tested</span>
+</div>
+
+<div class="export">
+  <span class="export-label">Export</span>
+  <button type="button" class="btn" [disabled]="exporting()" (click)="export('excel')">
+    {{ exporting() === 'excel' ? 'Creating…' : 'Excel' }}
+  </button>
+  <button type="button" class="btn" [disabled]="exporting()" (click)="export('pdf')">
+    {{ exporting() === 'pdf' ? 'Creating…' : 'PDF' }}
+  </button>
+  <label class="export-filtered">
+    <input
+      type="checkbox"
+      [checked]="exportFilteredOnly()"
+      (change)="exportFilteredOnly.set($any($event.target).checked)"
+    />
+    Only the {{ filtered().length }} filtered cases
+  </label>
+  @if (exportError(); as error) {
+    <span class="export-error">{{ error }}</span>
+  }
+</div>
+
+<div class="filters">
+  <label class="search">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="M13.2 13.2L17 17" />
+    </svg>
+    <input
+      type="search"
+      placeholder="Search cases…"
+      aria-label="Search cases"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </label>
+  <app-select
+    triggerId="filter-category"
+    [groups]="categoryOptions()"
+    [searchable]="false"
+    [value]="category()"
+    (valueChange)="category.set($event)"
+  />
+  <app-select
+    triggerId="filter-status"
+    [groups]="statusOptions"
+    [searchable]="false"
+    [value]="statusFilter()"
+    (valueChange)="statusFilter.set($event)"
+  />
+  <app-select
+    triggerId="filter-verification"
+    [groups]="verificationOptions"
+    [searchable]="false"
+    [value]="verification()"
+    (valueChange)="verification.set($event)"
+  />
+</div>
+
+<p class="muted small showing">
+  Showing {{ filtered().length }} of {{ total }} cases
+  @if (filtered().length !== total) {
+    · <button type="button" class="link" (click)="clearFilters()">Clear filters</button>
+  }
+</p>
+
+<div class="cases">
+  @for (c of filtered(); track c.id) {
+    @let status = statusOf(c);
+    <article class="case" [attr.data-status]="status">
+      <div class="body">
+        <div class="meta">
+          <span class="id">{{ c.id }}</span>
+          <span class="category">{{ c.category }}</span>
+          <span class="priority" [attr.data-priority]="c.priority">{{ c.priority }}</span>
+          @if (c.verification === 'Needs verification') {
+            <span class="verify">Needs verification</span>
+          }
+          <span class="muted">{{ c.component }}</span>
+        </div>
+        <div class="title">{{ c.title }}</div>
+        <ol class="steps">
+          @for (step of c.steps; track $index) {
+            <li>{{ step }}</li>
+          }
+        </ol>
+        <div class="expected"><span class="muted">Expected:</span> {{ c.expected }}</div>
+        <div class="source muted small">{{ c.source }}</div>
+      </div>
+      <div class="result">
+        <div class="status" role="group" [attr.aria-label]="'Status of ' + c.id">
+          @for (s of statuses; track s) {
+            <button
+              type="button"
+              class="status-btn"
+              [attr.data-status]="s"
+              [class.on]="status === s"
+              [attr.aria-pressed]="status === s"
+              (click)="setStatus(c, s)"
+            >
+              {{ s }}
+            </button>
+          }
+        </div>
+        <textarea
+          rows="2"
+          placeholder="Actual result / comment"
+          [attr.aria-label]="'Comment for ' + c.id"
+          [value]="commentOf(c)"
+          (input)="setComment(c, $any($event.target).value)"
+        ></textarea>
+      </div>
+    </article>
+  } @empty {
+    <p class="empty muted">No cases match the filters.</p>
+  }
+</div>
