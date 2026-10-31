@@ -63,6 +63,33 @@
     } @else {
       <p class="muted">No Angular route matches this tab.</p>
     }
+
+    @if (componentTree(); as tree) {
+      @if (tree.rows.length) {
+        <h2>Components</h2>
+        <p class="muted small">
+          {{ visibleComponents().length }} of {{ tree.rows.length }} components ·
+          {{ tree.levelCounts.length - 1 }} levels
+          @if (sel.childDepth !== null) {
+            · showing up to level {{ sel.childDepth }}
+          }
+        </p>
+        <ul class="tree">
+          @for (row of visibleComponents(); track row.key) {
+            <li [style.padding-left.px]="row.level * 24 + 12">
+              <div class="tree-line">
+                <span class="level">L{{ row.level }}</span>
+                <span class="name">{{ row.component.name }}</span>
+                @if (row.viaDialog) {
+                  <span class="chip">dialog</span>
+                }
+              </div>
+              <div class="muted small">{{ row.component.file }}</div>
+            </li>
+          }
+        </ul>
+      }
+    }
   } @else {
     <div class="empty">
       <h1>Select a navigation tab</h1>

@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 
 import { NavPanel } from './registry/nav-panel/nav-panel';
 import { NavMenu, TabSelection } from './registry/registry-nav.model';
@@ -20,6 +20,18 @@ export class App {
   protected readonly selection = signal<TabSelection | null>(null);
   protected readonly notice = signal<string | null>(null);
   protected readonly theme = signal<Theme>(initialTheme());
+
+  protected readonly componentTree = computed(() => {
+    const sel = this.selection();
+    return sel ? this.registry.componentTree(sel.tab.routes) : null;
+  });
+
+  /** Tree rows down to the chosen Child depth (all rows for Auto). */
+  protected readonly visibleComponents = computed(() => {
+    const rows = this.componentTree()?.rows ?? [];
+    const depth = this.selection()?.childDepth ?? null;
+    return depth === null ? rows : rows.filter((r) => r.level <= depth);
+  });
 
   constructor() {
     const root = inject(DOCUMENT).documentElement;

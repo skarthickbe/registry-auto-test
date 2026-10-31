@@ -14,10 +14,37 @@ const NAV: RegistryNav = {
       id: 'r1',
       path: '/staff/patient/details/:id/104',
       component: 'TumorTrackingComponent',
+      componentFile: 'tumor-tracking.ts',
       parents: [],
       definedIn: { file: 'src/app/patient-panel.routes.ts', line: 66 },
     },
   ],
+  components: {
+    'tumor-tracking.ts#TumorTrackingComponent': {
+      name: 'TumorTrackingComponent',
+      file: 'tumor-tracking.ts',
+      children: ['viewer.ts#TextInputViewerComponent'],
+      dialogs: ['add-tumor.ts#AddTumorComponent'],
+    },
+    'viewer.ts#TextInputViewerComponent': {
+      name: 'TextInputViewerComponent',
+      file: 'viewer.ts',
+      children: [],
+      dialogs: [],
+    },
+    'add-tumor.ts#AddTumorComponent': {
+      name: 'AddTumorComponent',
+      file: 'add-tumor.ts',
+      children: ['upload.ts#UploadWidgetComponent'],
+      dialogs: [],
+    },
+    'upload.ts#UploadWidgetComponent': {
+      name: 'UploadWidgetComponent',
+      file: 'upload.ts',
+      children: [],
+      dialogs: [],
+    },
+  },
   menus: [
     {
       id: 'staff-pm',
@@ -113,6 +140,33 @@ describe('App', () => {
     TestBed.tick();
 
     expect(el.querySelector('main .notice')?.textContent).toContain('Tumor Tracking');
+  });
+
+  it('previews the component tree and offers one depth per level', async () => {
+    const { el, choose, optionLabels } = await render();
+    await choose('menu', 'Patient Management');
+    await choose('tab', 'Tumor Tracking');
+
+    const rows = () =>
+      [...el.querySelectorAll('.tree li')].map((li) =>
+        [...li.querySelectorAll('.tree-line > span')].map((s) => s.textContent!.trim()).join(' '),
+      );
+    expect(rows()).toEqual([
+      'L0 TumorTrackingComponent',
+      'L1 TextInputViewerComponent',
+      'L1 AddTumorComponent dialog',
+      'L2 UploadWidgetComponent',
+    ]);
+    expect(await optionLabels('depth')).toEqual([
+      'Auto · 2 levels · 4 components',
+      '0 · route component only · 1 component',
+      '1 · up to level 1 · 3 components',
+      '2 · up to level 2 · 4 components',
+    ]);
+
+    await choose('depth', '1 · up to level 1 · 3 components');
+    expect(rows()).toHaveLength(3);
+    expect(el.querySelector('main')!.textContent).toContain('showing up to level 1');
   });
 
   it('switches and remembers the theme', async () => {

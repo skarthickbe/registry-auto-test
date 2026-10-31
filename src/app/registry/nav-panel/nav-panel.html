@@ -70,7 +70,7 @@
   <label class="field-label" for="depth">Child depth</label>
   <app-select
     triggerId="depth"
-    [groups]="depthOptions"
+    [groups]="depthOptions()"
     [searchable]="false"
     [value]="depthKey(childDepth())"
     (valueChange)="selectDepth($event)"

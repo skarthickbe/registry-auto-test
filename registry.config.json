@@ -1,5 +1,6 @@
 {
   "appPath": "../../registry/UI/registry-app",
   "navSqlPath": "../../registry/API/registryapi/data_migration/00_nav_insert.sql",
-  "output": "public/registry-nav.json"
+  "output": "public/registry-nav.json",
+  "excludeComponentDirs": ["src/@fuse"]
 }

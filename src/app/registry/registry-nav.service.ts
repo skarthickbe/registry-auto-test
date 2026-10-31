@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { ComponentTree, buildComponentTree } from './component-tree';
 import { RegistryNav, RegistryRoute } from './registry-nav.model';
 
 @Injectable({ providedIn: 'root' })
@@ -34,5 +35,10 @@ export class RegistryNavService {
   routes(ids: string[]): RegistryRoute[] {
     const byId = this.routesById();
     return ids.map((id) => byId.get(id)).filter((r): r is RegistryRoute => !!r);
+  }
+
+  /** Components rendered or opened (at any depth) by the components of the given routes. */
+  componentTree(routeIds: string[]): ComponentTree {
+    return buildComponentTree(this.routes(routeIds), this.nav()?.components ?? {});
   }
 }

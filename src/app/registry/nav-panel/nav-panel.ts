@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, output, signal } from '@angular/core';
 
-import { Select, SelectGroup } from '../../ui/select/select';
+import { Select, SelectGroup, SelectOption } from '../../ui/select/select';
 import { ChildDepth, NavMenu, NavTab, TabSelection } from '../registry-nav.model';
 import { RegistryNavService } from '../registry-nav.service';
 
@@ -31,18 +31,6 @@ export class NavPanel {
   readonly selectionChange = output<TabSelection | null>();
   readonly generateChecklist = output<TabSelection>();
   readonly unusedCodeReport = output<NavMenu | null>();
-
-  protected readonly depthOptions: SelectGroup[] = [
-    {
-      options: [
-        { value: 'auto', label: 'Auto (all child components)' },
-        { value: '0', label: '0 (route component only)' },
-        { value: '1', label: '1' },
-        { value: '2', label: '2' },
-        { value: '3', label: '3' },
-      ],
-    },
-  ];
 
   private readonly saved = readState();
   protected readonly showOther = signal(this.saved.showOther ?? false);
@@ -101,6 +89,35 @@ export class NavPanel {
     this.selectedMenu()?.tabs.find((t) => t.id === this.tabId()),
   );
 
+  /** Component levels under the selected tab, e.g. [1, 8, 10, 5, 6, 5]. */
+  private readonly levelCounts = computed(() => {
+    const tab = this.selectedTab();
+    return tab ? this.registry.componentTree(tab.routes).levelCounts : [];
+  });
+
+  /** "Auto" plus one option per level that actually exists under the selected tab. */
+  protected readonly depthOptions = computed<SelectGroup[]>(() => {
+    const counts = this.levelCounts();
+    const total = counts.reduce((sum, n) => sum + n, 0);
+    const options: SelectOption[] = [
+      {
+        value: 'auto',
+        label: counts.length
+          ? `Auto · ${counts.length - 1} levels · ${componentCount(total)}`
+          : 'Auto (all child components)',
+      },
+    ];
+    let upTo = 0;
+    counts.forEach((n, level) => {
+      upTo += n;
+      options.push({
+        value: String(level),
+        label: `${level} · ${level === 0 ? 'route component only' : `up to level ${level}`} · ${componentCount(upTo)}`,
+      });
+    });
+    return [{ options }];
+  });
+
   private readonly selection = computed<TabSelection | null>(() => {
     const menu = this.selectedMenu();
     const tab = this.selectedTab();
@@ -110,6 +127,12 @@ export class NavPanel {
   constructor() {
     void this.registry.load();
     effect(() => this.selectionChange.emit(this.selection()));
+    // A depth chosen for a deeper tab falls back to Auto when the new tab has fewer levels.
+    effect(() => {
+      const levels = this.levelCounts().length;
+      const depth = this.childDepth();
+      if (levels && depth !== null && depth > levels - 1) this.childDepth.set(null);
+    });
     effect(() =>
       writeState({
         menuId: this.menuId(),
@@ -137,6 +160,10 @@ export class NavPanel {
     const selection = this.selection();
     if (selection) this.generateChecklist.emit(selection);
   }
+}
+
+function componentCount(n: number): string {
+  return n === 1 ? '1 component' : `${n} components`;
 }
 
 function readState(): SavedState {

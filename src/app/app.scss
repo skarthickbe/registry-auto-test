@@ -122,6 +122,62 @@ th {
   font-weight: 600;
 }
 
+.tree {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+
+  li {
+    padding-top: 9px;
+    padding-right: 12px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .small {
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.tree-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level {
+  flex: none;
+  min-width: 28px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.chip {
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.88rem;

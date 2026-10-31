@@ -4,7 +4,19 @@ export interface RegistryNav {
   source: { appPath: string; rootFile?: string; navSql?: string };
   warnings: string[];
   routes: RegistryRoute[];
+  /** Keyed by `<file>#<ClassName>`, e.g. `src/app/.../tumor-tracking.component.ts#TumorTrackingComponent`. */
+  components: Record<string, RegistryComponent>;
   menus: NavMenu[];
+}
+
+export interface RegistryComponent {
+  name: string;
+  file: string;
+  selector?: string;
+  /** Components used in the template. */
+  children: string[];
+  /** Components opened with `.open(X)` (MatDialog, bottom sheet, …). */
+  dialogs: string[];
 }
 
 export interface RegistryRoute {

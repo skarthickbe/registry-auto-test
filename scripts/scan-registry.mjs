@@ -14,6 +14,8 @@ const APP = path.resolve(ROOT, config.appPath);
 const SRC = path.join(APP, 'src');
 const NAV_SQL = config.navSqlPath ? path.resolve(ROOT, config.navSqlPath) : undefined;
 const OUTPUT = path.resolve(ROOT, config.output);
+// Vendored libraries inside the app (e.g. the Fuse template) are not the team's own components.
+const EXCLUDE_COMPONENT_DIRS = (config.excludeComponentDirs ?? []).map((d) => path.resolve(APP, d) + path.sep);
 
 const rel = (file) => path.relative(APP, file);
 
@@ -358,6 +360,107 @@ function findRootRoutes(index, resolveArray, exportedRoutes) {
 }
 
 // ---------------------------------------------------------------------------
+// Component tree: which project components each component renders or opens
+// ---------------------------------------------------------------------------
+
+/** Element and attribute names a selector such as 'app-card, [appTooltip]' matches. */
+function selectorTargets(selector) {
+  const tags = [];
+  const attrs = [];
+  for (const part of selector.split(',').map((s) => s.trim())) {
+    const tag = /^[a-zA-Z][\w-]*/.exec(part)?.[0];
+    const attr = /^\[([\w-]+)/.exec(part)?.[1];
+    if (tag) tags.push(tag.toLowerCase());
+    else if (attr) attrs.push(attr.toLowerCase());
+  }
+  return { tags, attrs };
+}
+
+function discoverComponents(index) {
+  const found = [];
+  for (const file of walkFiles(index.srcDir)) {
+    if (EXCLUDE_COMPONENT_DIRS.some((dir) => file.startsWith(dir))) continue;
+    if (!fs.readFileSync(file, 'utf8').includes('@Component')) continue;
+    const sf = index.getSourceFile(file);
+    for (const cls of sf.statements) {
+      if (!ts.isClassDeclaration(cls) || !cls.name) continue;
+      const decorator = (ts.getDecorators(cls) ?? []).find((d) => ts.isCallExpression(d.expression) && d.expression.expression.getText() === 'Component');
+      const meta = decorator?.expression.arguments[0];
+      if (!meta || !ts.isObjectLiteralExpression(meta)) continue;
+      const selectorExpr = getProperty(meta, 'selector');
+      const templateUrl = getProperty(meta, 'templateUrl');
+      const inline = getProperty(meta, 'template');
+      let template = '';
+      if (templateUrl) {
+        try {
+          template = fs.readFileSync(path.resolve(path.dirname(file), index.evalString(templateUrl, file)), 'utf8');
+        } catch {
+          // Missing template file: the component simply has no template children.
+        }
+      } else if (inline) {
+        template = index.evalString(inline, file);
+      }
+      found.push({
+        key: `${rel(file)}#${cls.name.text}`,
+        file,
+        cls,
+        name: cls.name.text,
+        selector: selectorExpr ? index.evalString(selectorExpr, file) : undefined,
+        template: template.replace(/<!--[\s\S]*?-->/g, ''),
+      });
+    }
+  }
+
+  const byTag = new Map();
+  const byAttr = new Map();
+  const byFileAndName = new Map(found.map((c) => [`${c.file}#${c.name}`, c.key]));
+  for (const c of found) {
+    if (!c.selector) continue;
+    const { tags, attrs } = selectorTargets(c.selector);
+    for (const t of tags) if (!byTag.has(t)) byTag.set(t, c.key);
+    for (const a of attrs) if (!byAttr.has(a)) byAttr.set(a, c.key);
+  }
+
+  const components = {};
+  for (const c of found) {
+    const children = new Set();
+    const dialogs = new Set();
+    // <app-card ...> in the template
+    for (const m of c.template.matchAll(/<([a-zA-Z][\w-]*)/g)) {
+      const key = byTag.get(m[1].toLowerCase());
+      if (key) children.add(key);
+    }
+    // <div appTooltip ...> for attribute selectors
+    for (const [attr, key] of byAttr) {
+      if (new RegExp(`[\\s\\[]${attr}[\\s=\\]>/]`, 'i').test(c.template)) children.add(key);
+    }
+    // this.dialog.open(AddTumorComponent, ...) in the class
+    const visit = (n) => {
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'open') {
+        const arg = n.arguments[0];
+        if (arg && ts.isIdentifier(arg)) {
+          const targetFile = index.resolveClassFile(c.file, arg.text);
+          const key = targetFile && byFileAndName.get(`${targetFile}#${arg.text}`);
+          if (key) dialogs.add(key);
+        }
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(c.cls);
+    children.delete(c.key);
+    dialogs.delete(c.key);
+    components[c.key] = {
+      name: c.name,
+      file: rel(c.file),
+      selector: c.selector,
+      children: [...children],
+      dialogs: [...dialogs].filter((k) => !children.has(k)),
+    };
+  }
+  return components;
+}
+
+// ---------------------------------------------------------------------------
 // Navigation seed SQL (navigation_page / navigation_subpage)
 // ---------------------------------------------------------------------------
 
@@ -665,6 +768,7 @@ function scan() {
     source: { appPath: APP, rootFile, navSql: nav ? NAV_SQL : undefined },
     warnings,
     routes,
+    components: discoverComponents(index),
     menus: buildMenus(routes, nav),
   };
 }
@@ -681,7 +785,7 @@ function scanAndWrite() {
   fs.writeFileSync(OUTPUT, JSON.stringify(result, null, 2));
   const confirmed = result.menus.filter((m) => m.confirmed).length;
   console.log(
-    `[scan-registry] ${result.routes.length} routes, ${confirmed} menus (+${result.menus.length - confirmed} other) → ${path.relative(ROOT, OUTPUT)} in ${Date.now() - started} ms`,
+    `[scan-registry] ${result.routes.length} routes, ${Object.keys(result.components).length} components, ${confirmed} menus (+${result.menus.length - confirmed} other) → ${path.relative(ROOT, OUTPUT)} in ${Date.now() - started} ms`,
   );
   for (const w of result.warnings) console.warn(`[scan-registry] warning: ${w}`);
 }
