@@ -1,5 +1,9 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+
+import { RegistryNavService } from '../registry-nav.service';
 
 import { TestCase } from '../checklist-generator';
 import { ChecklistView } from './checklist-view';
@@ -33,7 +37,12 @@ class Host {
 }
 
 describe('ChecklistView', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+  });
 
   async function setup() {
     const fixture = TestBed.createComponent(Host);
@@ -105,5 +114,40 @@ describe('ChecklistView', () => {
       .click();
     await settle();
     expect(ids()).toEqual(['TC-002']);
+  });
+
+  it('shows Playwright results and uses them until a status is set by hand', async () => {
+    TestBed.inject(RegistryNavService).e2e.set({
+      runAt: '2026-10-31T06:30:00.000Z',
+      status: 'failed',
+      results: [
+        {
+          component: 'PageComponent',
+          title: 'Click "Save"',
+          status: 'failed',
+          duration: 7400,
+          error: 'expect(locator).toBeVisible() failed',
+          notes: ['Error shown: Invalid email or password.'],
+          screenshots: ['e2e-shots/save-0.png'],
+        },
+      ],
+    });
+    const { el, settle, count, statusBtn } = await setup();
+    await settle();
+
+    expect(el.querySelector('.e2e-run')!.textContent).toContain('1 of 3 cases');
+    const card = el.querySelector('.cases .case:nth-child(1)')!;
+    expect(card.querySelector('.e2e')!.textContent).toContain('Playwright: failed');
+    expect(card.querySelector('.e2e')!.textContent).toContain('Invalid email or password.');
+    expect(card.querySelector<HTMLImageElement>('.shots img')!.getAttribute('src')).toBe(
+      'e2e-shots/save-0.png',
+    );
+    expect(statusBtn(1, 'Fail').classList).toContain('on');
+    expect(count('.fail')).toBe('1');
+
+    statusBtn(1, 'Pass').click();
+    await settle();
+    expect(statusBtn(1, 'Pass').classList).toContain('on');
+    expect(card.querySelector('.e2e')!.textContent).not.toContain('sets the status');
   });
 });

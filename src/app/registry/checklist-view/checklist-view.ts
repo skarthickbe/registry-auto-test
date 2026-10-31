@@ -1,8 +1,11 @@
-import { Component, computed, effect, input, linkedSignal, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
 
 import { Select, SelectGroup } from '../../ui/select/select';
 import { Status, TestCase } from '../checklist-generator';
 import { ChecklistExport, exportExcel, exportPdf } from '../checklist-export';
+import { E2eResult } from '../registry-nav.model';
+import { RegistryNavService } from '../registry-nav.service';
 
 interface CaseResult {
   status: Status;
@@ -15,13 +18,22 @@ const ALL = '';
 /** Results are stored by component + title, so they survive regeneration (ids shift when the ticked components change). */
 const fingerprint = (c: TestCase) => `${c.component}|${c.title}`;
 
+const E2E_STATUS: Record<E2eResult['status'], Status> = {
+  passed: 'Pass',
+  failed: 'Fail',
+  timedOut: 'Fail',
+  interrupted: 'Fail',
+  skipped: 'Not tested',
+};
+
 @Component({
   selector: 'app-checklist-view',
-  imports: [Select],
+  imports: [Select, DatePipe],
   templateUrl: './checklist-view.html',
   styleUrl: './checklist-view.scss',
 })
 export class ChecklistView {
+  protected readonly registry = inject(RegistryNavService);
   readonly cases = input.required<TestCase[]>();
   /** Where this checklist's results are saved, e.g. the menu + tab id. */
   readonly storageKey = input.required<string>();
@@ -35,6 +47,18 @@ export class ChecklistView {
   protected readonly exportError = signal<string | null>(null);
 
   protected readonly results = linkedSignal(() => readResults(this.storageKey()));
+  /** Playwright results by component + title. Page-open cases match any "Open the … page" test of their component. */
+  private readonly e2eByKey = computed(() => {
+    const map = new Map<string, E2eResult>();
+    for (const r of this.registry.e2e()?.results ?? []) {
+      map.set(`${r.component}|${r.title}`, r);
+      if (/^Open the .* page$/.test(r.title)) map.set(`${r.component}|@page`, r);
+    }
+    return map;
+  });
+
+  protected readonly e2eMatched = computed(() => this.cases().filter((c) => this.e2eOf(c)).length);
+
   protected readonly search = signal('');
   protected readonly category = signal(ALL);
   protected readonly statusFilter = signal(ALL);
@@ -100,8 +124,27 @@ export class ChecklistView {
     effect(() => writeResults(this.storageKey(), this.results()));
   }
 
+  protected e2eOf(c: TestCase): E2eResult | undefined {
+    const map = this.e2eByKey();
+    return (
+      map.get(fingerprint(c)) ??
+      (c.category === 'Navigation' ? map.get(`${c.component}|@page`) : undefined)
+    );
+  }
+
+  /** A status set by hand wins; otherwise the Playwright result, if there is one. */
   protected statusOf(c: TestCase): Status {
-    return this.results()[fingerprint(c)]?.status ?? 'Not tested';
+    const e2e = this.e2eOf(c);
+    return this.manualStatusOf(c) ?? (e2e ? E2E_STATUS[e2e.status] : 'Not tested');
+  }
+
+  protected isAutoStatus(c: TestCase): boolean {
+    return !this.manualStatusOf(c) && !!this.e2eOf(c);
+  }
+
+  private manualStatusOf(c: TestCase): Status | undefined {
+    const status = this.results()[fingerprint(c)]?.status;
+    return status && status !== 'Not tested' ? status : undefined;
   }
 
   protected commentOf(c: TestCase): string {
@@ -110,7 +153,7 @@ export class ChecklistView {
 
   /** Clicking the active status again sets the case back to Not tested. */
   protected setStatus(c: TestCase, status: Status): void {
-    this.update(c, { status: this.statusOf(c) === status ? 'Not tested' : status });
+    this.update(c, { status: this.manualStatusOf(c) === status ? 'Not tested' : status });
   }
 
   protected setComment(c: TestCase, comment: string): void {
@@ -147,7 +190,11 @@ export class ChecklistView {
   private update(c: TestCase, change: Partial<CaseResult>): void {
     const key = fingerprint(c);
     this.results.update((all) => {
-      const next = { status: this.statusOf(c), comment: this.commentOf(c), ...change };
+      const next = {
+        status: this.manualStatusOf(c) ?? 'Not tested',
+        comment: this.commentOf(c),
+        ...change,
+      };
       const copy = { ...all };
       if (next.status === 'Not tested' && !next.comment) delete copy[key];
       else copy[key] = next;

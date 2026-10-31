@@ -377,8 +377,11 @@ const translate = (expr, i18n) => [...expr.matchAll(/\bt\(\s*'([^']+)'/g)].map((
 /** Visible text of a template fragment: t('key') in English, other bindings and tags dropped. */
 function templateText(html, i18n) {
   return html
+    // Control flow such as `@if (cond) {` and `} @else {` is markup, not text.
+    .replace(/@(?:if|else if|else|for|switch|case|default|defer|placeholder|loading|empty)\b[^{]*\{/g, ' ')
     .replace(/\{\{([\s\S]*?)\}\}/g, (_, expr) => ` ${translate(expr, i18n).join(' / ')} `)
     .replace(/<[^>]+>/g, ' ')
+    .replace(/[{}]/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -386,11 +389,11 @@ function templateText(html, i18n) {
 
 /** An attribute's text: plain `name="x"`, or the English of `[name]="t('key')"`. */
 function attrText(tag, name, i18n) {
-  const m = new RegExp(`\\s(\\[?)${name}\\]?\\s*=\\s*"([^"]*)"`, 'i').exec(tag);
+  const m = new RegExp(`\\s(\\[?)(?:attr\\.)?${name}\\]?\\s*=\\s*"([^"]*)"`, 'i').exec(tag);
   if (!m) return undefined;
   if (!m[1]) return m[2];
   const keys = translate(m[2], i18n);
-  return keys.length ? keys.join(' ') : undefined;
+  return keys.length ? keys.join(' / ') : undefined;
 }
 
 const attrValue = (tag, name) => new RegExp(`\\s\\[?${name}\\]?\\s*=\\s*"([^"]*)"`, 'i').exec(tag)?.[1];
@@ -411,7 +414,8 @@ function extractFields(html, i18n) {
     const control = [...block.matchAll(/<(input|textarea|mat-select)\b[^>]*>/g)].find((t) => /formControlName|\[formControl\]|ngModel/.test(t[0]));
     if (!control) continue;
     const tag = control[0];
-    const name = attrValue(tag, 'formControlName') ?? attrValue(tag, 'formControl') ?? /\[\(ngModel\)\]\s*=\s*"([^"]+)"/.exec(tag)?.[1];
+    // [formControlName]="'email'" binds a string literal: drop the quotes.
+    const name = (attrValue(tag, 'formControlName') ?? attrValue(tag, 'formControl') ?? /\[\(ngModel\)\]\s*=\s*"([^"]+)"/.exec(tag)?.[1])?.replace(/^'(.*)'$/, '$1');
     let kind = control[1] === 'mat-select' ? 'select' : control[1];
     if (kind === 'input') kind = /matDatepicker/.test(tag) ? 'date' : (attrValue(tag, 'type') ?? 'text');
     add({
@@ -425,7 +429,7 @@ function extractFields(html, i18n) {
     });
   }
   for (const m of html.matchAll(/<(mat-checkbox|mat-slide-toggle|mat-radio-group)\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
-    const name = attrValue(m[2], 'formControlName');
+    const name = attrValue(m[2], 'formControlName')?.replace(/^'(.*)'$/, '$1');
     if (!name) continue;
     const radio = m[1] === 'mat-radio-group';
     add({
@@ -477,7 +481,7 @@ function extractButtons(html, i18n) {
       templateText(m[2].replace(/<mat-icon\b[\s\S]*?<\/mat-icon>/g, ''), i18n) ||
       attrText(tag, 'matTooltip', i18n) ||
       attrText(tag, 'aria-label', i18n) ||
-      (icon && (attrValue(icon[1], 'svgIcon') ?? icon[2].trim()));
+      (icon && (attrValue(icon[1], 'svgIcon') ?? icon[2].trim()).replace(/^'(.*)'$/, '$1'));
     const click = /\(click\)\s*=\s*"([^"]*)"/.exec(tag)?.[1];
     const submit = /type\s*=\s*"submit"/.test(tag);
     if (!text && !click && !submit) continue;

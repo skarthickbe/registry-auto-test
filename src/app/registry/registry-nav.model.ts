@@ -104,3 +104,25 @@ export interface TabSelection {
   tab: NavTab;
   childDepth: ChildDepth;
 }
+
+/** Shape of public/e2e-results.json, written by e2e/checklist-reporter.ts after `npm run e2e`. */
+export interface E2eResults {
+  runAt: string;
+  status: string;
+  results: E2eResult[];
+}
+
+export interface E2eResult {
+  /** Component class from the test's describe title. */
+  component?: string;
+  /** Matches the checklist case title. */
+  title: string;
+  status: 'passed' | 'failed' | 'timedOut' | 'skipped' | 'interrupted';
+  /** Milliseconds. */
+  duration: number;
+  error?: string;
+  /** Annotations such as "Error shown: Invalid email or password." */
+  notes: string[];
+  /** Paths relative to the app root, e.g. e2e-shots/x.png. */
+  screenshots: string[];
+}
