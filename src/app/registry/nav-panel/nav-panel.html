@@ -1,0 +1,96 @@
+<section class="panel">
+  <h2 class="panel-title"><span class="step">1</span> Source</h2>
+  @if (registry.nav(); as nav) {
+    <p class="source">
+      Registry App routes · {{ nav.routes.length }} routes · scanned
+      {{ nav.generatedAt | date: 'shortTime' }}
+    </p>
+    @if (nav.warnings.length) {
+      <details class="warnings">
+        <summary>{{ nav.warnings.length }} scan warning(s)</summary>
+        <ul>
+          @for (w of nav.warnings; track $index) {
+            <li>{{ w }}</li>
+          }
+        </ul>
+      </details>
+    }
+  } @else if (registry.error(); as error) {
+    <p class="error">{{ error }}</p>
+  } @else {
+    <p class="source">Loading routes…</p>
+  }
+</section>
+
+<section class="panel">
+  <h2 class="panel-title"><span class="step">2</span> Navigation Tab</h2>
+
+  <label class="field-label" for="menu">Menu</label>
+  <select id="menu" class="select" (change)="selectMenu($any($event.target).value)">
+    <option value="" disabled [selected]="!selectedMenu()">Select a menu…</option>
+    @for (group of menuGroups(); track group.label) {
+      <optgroup [label]="group.label">
+        @for (menu of group.menus; track menu.id) {
+          <option [value]="menu.id" [selected]="menu.id === menuId()">{{ menu.label }}</option>
+        }
+      </optgroup>
+    }
+  </select>
+
+  <label class="field-label" for="tab">Tab</label>
+  <div class="row">
+    <select
+      id="tab"
+      class="select grow"
+      [disabled]="!selectedMenu()"
+      (change)="tabId.set($any($event.target).value)"
+    >
+      <option value="" disabled [selected]="!selectedTab()">Select a tab…</option>
+      @for (group of tabGroups(); track $index) {
+        @if (group.section) {
+          <optgroup [label]="group.section">
+            @for (tab of group.tabs; track tab.id) {
+              <option [value]="tab.id" [selected]="tab.id === tabId()">{{ tab.title }}</option>
+            }
+          </optgroup>
+        } @else {
+          @for (tab of group.tabs; track tab.id) {
+            <option [value]="tab.id" [selected]="tab.id === tabId()">{{ tab.title }}</option>
+          }
+        }
+      }
+    </select>
+    <button type="button" class="btn" [disabled]="registry.loading()" (click)="registry.load()">
+      {{ registry.loading() ? 'Loading…' : 'Refresh' }}
+    </button>
+  </div>
+
+  <label class="check">
+    <input
+      type="checkbox"
+      [checked]="showOther()"
+      (change)="showOther.set($any($event.target).checked)"
+    />
+    Show other menus (static / unconfirmed routes)
+  </label>
+
+  <div class="row depth">
+    <label for="depth">Child depth</label>
+    <select id="depth" class="select" (change)="selectDepth($any($event.target).value)">
+      @for (opt of depthOptions; track opt.label) {
+        <option [value]="depthKey(opt.value)" [selected]="opt.value === childDepth()">
+          {{ opt.label }}
+        </option>
+      }
+    </select>
+  </div>
+
+  <div class="row actions">
+    <button type="button" class="btn primary" [disabled]="!selectedTab()" (click)="generate()">
+      Generate Checklist
+    </button>
+    <button type="button" class="btn" (click)="unusedCodeReport.emit(selectedMenu() ?? null)">
+      Unused Code Report
+    </button>
+  </div>
+</section>

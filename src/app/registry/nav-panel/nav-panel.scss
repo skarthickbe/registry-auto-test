@@ -1,0 +1,135 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--step-bg, #263247);
+  color: var(--step-fg, #8fb0ef);
+  font-size: 0.95rem;
+}
+
+.source {
+  margin: 0;
+  color: var(--muted, #98a1b3);
+  font-size: 0.9rem;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger, #f08b8b);
+  font-size: 0.9rem;
+}
+
+.warnings {
+  margin-top: 8px;
+  color: var(--muted, #98a1b3);
+  font-size: 0.85rem;
+
+  ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+  }
+}
+
+.field-label {
+  display: block;
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--border, #323a4b);
+  border-radius: 8px;
+  background: var(--surface, #1b2130);
+  color: var(--text, #e8ebf2);
+  font: inherit;
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--text-soft, #d3d8e2);
+  cursor: pointer;
+
+  input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary, #5a73a8);
+  }
+}
+
+.depth {
+  label {
+    white-space: nowrap;
+  }
+
+  .select {
+    width: auto;
+  }
+}
+
+.actions {
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.btn {
+  padding: 11px 20px;
+  border: 1px solid var(--border, #323a4b);
+  border-radius: 8px;
+  background: var(--surface, #1b2130);
+  color: var(--text, #e8ebf2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-strong, #4a5468);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  &.primary {
+    border-color: transparent;
+    background: var(--primary, #5a73a8);
+    color: var(--on-primary, #0f1420);
+  }
+}
