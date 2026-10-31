@@ -356,3 +356,356 @@ function findRootRoutes(index, resolveArray, exportedRoutes) {
   const fallback = files.find((f) => /^(app\.routes|app-routing\.module)\.ts$/.test(path.basename(f)));
   return fallback ? exportedRoutes(fallback) : undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Navigation seed SQL (navigation_page / navigation_subpage)
+// ---------------------------------------------------------------------------
+
+/** Removes comments while keeping line breaks, so line numbers stay correct. */
+function stripSqlComments(sql) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (inString) {
+      out += c;
+      if (c === "'") {
+        if (sql[i + 1] === "'") out += sql[++i];
+        else inString = false;
+      }
+    } else if (c === "'") {
+      inString = true;
+      out += c;
+    } else if (c === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i++;
+      out += '\n';
+    } else if (c === '/' && sql[i + 1] === '*') {
+      const end = sql.indexOf('*/', i + 2);
+      const stop = end < 0 ? sql.length : end + 2;
+      out += sql.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop - 1;
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+/** Splits on top-level `;` and records each statement's starting line. */
+function splitStatements(sql) {
+  const out = [];
+  let depth = 0;
+  let inString = false;
+  let start = 0;
+  let line = 1;
+  let startLine = 1;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (c === '\n') line++;
+    if (inString) {
+      if (c === "'") {
+        if (sql[i + 1] === "'") i++;
+        else inString = false;
+      }
+      continue;
+    }
+    if (c === "'") inString = true;
+    else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ';' && depth <= 0) {
+      const text = sql.slice(start, i);
+      const lead = text.length - text.trimStart().length;
+      out.push({ text: text.trim(), line: startLine + (text.slice(0, lead).match(/\n/g)?.length ?? 0) });
+      start = i + 1;
+      startLine = line;
+    }
+  }
+  return out;
+}
+
+/** One SQL value: 'text', number, null, true/false, or (SELECT id FROM x WHERE col = 'v'). */
+function parseValue(raw) {
+  const v = raw.trim();
+  if (/^'.*'$/s.test(v)) return v.slice(1, -1).replace(/''/g, "'");
+  if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+  if (/^null$/i.test(v)) return null;
+  if (/^(true|false)$/i.test(v)) return v.toLowerCase() === 'true';
+  if (/^\(\s*select\b/i.test(v)) {
+    const where = {};
+    const re = /(\w+)\s*=\s*(?:'((?:[^']|'')*)'|(-?\d+))/g;
+    let m;
+    while ((m = re.exec(v))) where[m[1].toLowerCase()] = (m[2] ?? m[3]).replace(/''/g, "'");
+    return { where };
+  }
+  return v;
+}
+
+/** The `(...), (...)` rows after VALUES, split into raw column values. */
+function parseTuples(text, startLine) {
+  const tuples = [];
+  let i = 0;
+  let line = startLine;
+  while (i < text.length) {
+    if (text[i] === '\n') line++;
+    if (text[i] !== '(') {
+      i++;
+      continue;
+    }
+    const tupleLine = line;
+    const values = [];
+    let depth = 0;
+    let inString = false;
+    let current = '';
+    for (; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '\n') line++;
+      if (inString) {
+        current += ch;
+        if (ch === "'") {
+          if (text[i + 1] === "'") current += text[++i];
+          else inString = false;
+        }
+        continue;
+      }
+      if (ch === "'") {
+        inString = true;
+        current += ch;
+      } else if (ch === '(') {
+        if (depth > 0) current += ch;
+        depth++;
+      } else if (ch === ')') {
+        depth--;
+        if (depth === 0) {
+          values.push(current);
+          i++;
+          break;
+        }
+        current += ch;
+      } else if (ch === ',' && depth === 1) {
+        values.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    tuples.push({ values, line: tupleLine });
+  }
+  return tuples;
+}
+
+const asString = (v) => (v === null || v === undefined || typeof v === 'object' ? '' : String(v));
+const whereValue = (v, key) => (v && typeof v === 'object' ? v.where[key] : undefined);
+
+function parseNavSql(file) {
+  const sql = stripSqlComments(fs.readFileSync(file, 'utf8'));
+  const tables = new Map();
+  for (const stmt of splitStatements(sql)) {
+    const insert = /^INSERT\s+INTO\s+([\w."]+)\s*\(([^)]*)\)\s*VALUES\s*/i.exec(stmt.text);
+    if (insert) {
+      const table = insert[1].replace(/"/g, '').split('.').pop().toLowerCase();
+      const columns = insert[2].split(',').map((c) => c.trim().replace(/"/g, '').toLowerCase());
+      const tupleLine = stmt.line + (insert[0].match(/\n/g)?.length ?? 0);
+      const rows = tables.get(table) ?? [];
+      for (const tuple of parseTuples(stmt.text.slice(insert[0].length), tupleLine)) {
+        const values = {};
+        columns.forEach((col, i) => (values[col] = parseValue(tuple.values[i] ?? 'null')));
+        rows.push({ values, line: tuple.line });
+      }
+      tables.set(table, rows);
+      continue;
+    }
+    // e.g. UPDATE navigation_subpage SET group_key = 'My Treatments' WHERE subpage_id IN (108, 109, 110)
+    const update = /^UPDATE\s+([\w."]+)\s+SET\s+(\w+)\s*=\s*'((?:[^']|'')*)'\s+WHERE\s+(\w+)\s+(?:IN\s*\(([^)]*)\)|=\s*'?([^'\s]+)'?)/i.exec(stmt.text);
+    if (update) {
+      const table = update[1].replace(/"/g, '').split('.').pop().toLowerCase();
+      const targets = (update[5] ?? update[6] ?? '').split(',').map((s) => s.trim().replace(/'/g, ''));
+      for (const row of tables.get(table) ?? []) {
+        if (targets.includes(asString(row.values[update[4].toLowerCase()]))) row.values[update[2].toLowerCase()] = update[3].replace(/''/g, "'");
+      }
+    }
+  }
+  const pages = (tables.get('navigation_page') ?? []).map((row) => ({
+    title: asString(row.values.title),
+    link: asString(row.values.link),
+    audience: whereValue(row.values.user_type_id, 'type'),
+    order: Number(asString(row.values.page_order)) || 0,
+    description: asString(row.values.description) || undefined,
+    line: row.line,
+  }));
+  const subpages = (tables.get('navigation_subpage') ?? []).map((row) => ({
+    title: asString(row.values.title),
+    link: asString(row.values.link),
+    pageTitle: whereValue(row.values.page_id_id ?? row.values.page_id, 'title') ?? '',
+    subpageId: asString(row.values.subpage_id) || undefined,
+    groupKey: asString(row.values.group_key) || undefined,
+    order: Number(asString(row.values.page_order)) || 0,
+    description: asString(row.values.description) || undefined,
+    line: row.line,
+  }));
+  return { pages, subpages };
+}
+
+// ---------------------------------------------------------------------------
+// Menus and tabs
+// ---------------------------------------------------------------------------
+
+const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const normalizeLink = (link) => `/${link.split(/[?#]/)[0].split('/').filter(Boolean).join('/')}`;
+
+function pathMatches(routePath, link) {
+  const r = routePath.split('/').filter(Boolean);
+  const l = link.split('/').filter(Boolean);
+  return r.length === l.length && r.every((seg, i) => seg === l[i] || seg.startsWith(':') || l[i].startsWith(':'));
+}
+
+function buildMenus(routes, nav) {
+  const componentRoutes = routes.filter((r) => r.component);
+  const menus = [];
+  const mapped = new Set();
+
+  const mapLink = (link) => {
+    if (!link) return { routes: [], note: 'Navigation entry has no link.' };
+    const target = normalizeLink(link);
+    const exact = componentRoutes.filter((r) => r.path === target);
+    if (exact.length) return { routes: exact, note: `Matched link ${link} exactly.` };
+    const pattern = componentRoutes.filter((r) => pathMatches(r.path, target));
+    if (pattern.length) return { routes: pattern, note: `Matched link ${link} to a parameterised route.` };
+    const redirect = routes.find((r) => r.path === target && r.redirectTo !== undefined);
+    if (redirect) {
+      const to = normalizeLink(redirect.redirectTo.startsWith('/') ? redirect.redirectTo : `${target}/${redirect.redirectTo}`);
+      const hit = componentRoutes.filter((r) => r.path === to);
+      if (hit.length) return { routes: hit, note: `Link ${link} redirects to ${to}.` };
+    }
+    const withParam = componentRoutes.filter((r) => r.path.startsWith(`${target}/:`) && r.path.split('/').length === target.split('/').length + 1);
+    if (withParam.length) return { routes: withParam, note: `Link ${link} matched a route that adds a parameter.` };
+    return { routes: [], note: `No Angular route matches link ${link}.` };
+  };
+
+  // A subpage id is the last segment of a parameterised route, e.g. 104 → /staff/patient/details/:id/104
+  const mapSubpage = (pageLink, sub) => {
+    if (sub.subpageId) {
+      const byId = componentRoutes.filter((r) => {
+        const segs = r.path.split('/').filter(Boolean);
+        return segs[segs.length - 1] === sub.subpageId && segs.some((s) => s.startsWith(':'));
+      });
+      if (byId.length) {
+        const first = pageLink.split('/').filter(Boolean)[0];
+        const preferred = byId.filter((r) => r.path.split('/').filter(Boolean)[0] === first);
+        return { routes: preferred.length ? preferred : byId, note: `Matched by subpage id ${sub.subpageId}.` };
+      }
+    }
+    if (sub.link) return mapLink(sub.link);
+    return { routes: [], note: `No Angular route found for subpage id ${sub.subpageId ?? '(none)'}.` };
+  };
+
+  const tab = (id, title, section, link, mapping, line, description) => {
+    mapping.routes.forEach((r) => mapped.add(r.id));
+    return { id, title, section, link: link || undefined, description, routes: mapping.routes.map((r) => r.id), note: mapping.note, navLine: line };
+  };
+
+  if (nav) {
+    const audiences = [...new Set(nav.pages.map((p) => p.audience ?? 'Other'))].sort((a, b) => (b === 'Staff') - (a === 'Staff') || a.localeCompare(b));
+    for (const audience of audiences) {
+      const pages = nav.pages.filter((p) => (p.audience ?? 'Other') === audience).sort((a, b) => a.order - b.order);
+      const mainTabs = [];
+      const pageMenus = [];
+      for (const page of pages) {
+        const subs = nav.subpages.filter((s) => s.pageTitle === page.title).sort((a, b) => a.order - b.order);
+        if (!subs.length) {
+          mainTabs.push(tab(`nav:${slug(audience)}:${slug(page.title)}`, page.title, undefined, page.link, mapLink(page.link), page.line, page.description));
+          continue;
+        }
+        const keys = [...new Set(subs.map((s) => s.groupKey).filter(Boolean))];
+        const rank = (k) => (k ? keys.indexOf(k) : 999);
+        subs.sort((a, b) => rank(a.groupKey) - rank(b.groupKey) || a.order - b.order);
+        pageMenus.push({
+          id: `nav:${slug(audience)}:${slug(page.title)}`,
+          label: `${audience} › ${page.title}`,
+          audience,
+          confirmed: true,
+          tabs: subs.map((s) =>
+            tab(`nav:${slug(audience)}:${slug(page.title)}:${slug(s.title)}:${s.subpageId ?? ''}`, s.title, s.groupKey, s.link, mapSubpage(page.link, s), s.line, s.description),
+          ),
+        });
+      }
+      if (mainTabs.length) menus.push({ id: `nav:${slug(audience)}:main`, label: `${audience} › Main Menu`, audience, confirmed: true, tabs: mainTabs });
+      menus.push(...pageMenus);
+    }
+  }
+
+  // Routes that no navigation entry points at, grouped by their first two static path segments.
+  const other = new Map();
+  for (const route of componentRoutes) {
+    if (mapped.has(route.id)) continue;
+    const segs = route.path.split('/').filter(Boolean);
+    const stat = segs.slice(0, segs.length > 1 ? 2 : 1).filter((s) => !s.startsWith(':'));
+    const first = stat.length ? stat.join('/') : '(root)';
+    const list = other.get(first) ?? [];
+    list.push({ id: `route:${route.id}`, title: `${route.path} → ${route.component}`, link: route.path, routes: [route.id], note: 'Route only: no navigation entry confirms it is a visible tab.' });
+    other.set(first, list);
+  }
+  for (const [first, tabs] of [...other.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    menus.push({ id: `route:${first}`, label: `Other Routes › /${first}`, audience: 'Other', confirmed: false, tabs });
+  }
+  return menus;
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+function scan() {
+  const index = new ProjectIndex(SRC);
+  const { routes, rootFile, warnings } = discoverRoutes(index);
+  let nav;
+  if (NAV_SQL && fs.existsSync(NAV_SQL)) nav = parseNavSql(NAV_SQL);
+  else warnings.push(`Navigation SQL not found (${config.navSqlPath}); only route-based menus are listed.`);
+  return {
+    generatedAt: new Date().toISOString(),
+    source: { appPath: APP, rootFile, navSql: nav ? NAV_SQL : undefined },
+    warnings,
+    routes,
+    menus: buildMenus(routes, nav),
+  };
+}
+
+let lastBody = '';
+function scanAndWrite() {
+  const started = Date.now();
+  const result = scan();
+  // Skip the write when nothing but the timestamp changed.
+  const body = JSON.stringify({ ...result, generatedAt: undefined });
+  if (body === lastBody) return;
+  lastBody = body;
+  fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
+  fs.writeFileSync(OUTPUT, JSON.stringify(result, null, 2));
+  const confirmed = result.menus.filter((m) => m.confirmed).length;
+  console.log(
+    `[scan-registry] ${result.routes.length} routes, ${confirmed} menus (+${result.menus.length - confirmed} other) → ${path.relative(ROOT, OUTPUT)} in ${Date.now() - started} ms`,
+  );
+  for (const w of result.warnings) console.warn(`[scan-registry] warning: ${w}`);
+}
+
+if (!fs.existsSync(SRC)) {
+  console.error(`[scan-registry] Registry App source not found at ${SRC}. Check appPath in registry.config.json.`);
+  process.exit(1);
+}
+
+scanAndWrite();
+
+if (process.argv.includes('--watch')) {
+  let timer;
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      try {
+        scanAndWrite();
+      } catch (e) {
+        console.error(`[scan-registry] scan failed: ${e.message}`);
+      }
+    }, 300);
+  };
+  fs.watch(SRC, { recursive: true }, (_event, file) => file?.endsWith('.ts') && schedule());
+  if (NAV_SQL && fs.existsSync(NAV_SQL)) fs.watch(NAV_SQL, schedule);
+  console.log(`[scan-registry] watching ${SRC}`);
+}
