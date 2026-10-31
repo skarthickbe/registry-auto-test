@@ -160,14 +160,14 @@ describe('App', () => {
     expect(el.querySelector('.view-tab .badge')?.textContent).toBe('2');
     expect(titles()).toEqual(['Open the Tumor Tracking page', 'Open the AddTumorComponent dialog']);
 
-    await click('.cases .case:first-child .status-btn[data-status="Pass"]');
+    await click('.cases .case:first-of-type .status-btn[data-status="Pass"]');
     expect(el.querySelector('.count.pass strong')?.textContent).toBe('1');
 
     await click('.view-tab:nth-child(1)');
     expect(el.querySelector('.tree')).toBeTruthy();
     await click('.view-tab:nth-child(2)');
     expect(
-      el.querySelector('.cases .case:first-child .status-btn.on')?.getAttribute('data-status'),
+      el.querySelector('.cases .case:first-of-type .status-btn.on')?.getAttribute('data-status'),
     ).toBe('Pass');
   });
 

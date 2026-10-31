@@ -9,6 +9,8 @@ export type Category =
 
 export interface TestCase {
   id: string;
+  /** Checklist section, e.g. "Login" or the tab title. */
+  section?: string;
   category: Category;
   /** Component class the case belongs to. */
   component: string;
@@ -27,6 +29,8 @@ export interface ChecklistContext {
   /** First route of the tab, e.g. /staff/patient/details/:id/104. */
   routePath?: string;
   components: Record<string, RegistryComponent>;
+  /** Section every generated case belongs to. */
+  section?: string;
 }
 
 type Draft = Omit<TestCase, 'id'>;
@@ -47,7 +51,11 @@ export function generateChecklist(rows: ComponentRow[], ctx: ChecklistContext): 
       drafts.push(...buttonCases(c.name, b, where(b.line)));
     drafts.push(...listCases(c, where()));
   }
-  return drafts.map((d, i) => ({ id: `TC-${String(i + 1).padStart(3, '0')}`, ...d }));
+  return drafts.map((d, i) => ({
+    id: `TC-${String(i + 1).padStart(3, '0')}`,
+    section: ctx.section,
+    ...d,
+  }));
 }
 
 function pageCases(c: RegistryComponent, ctx: ChecklistContext): Draft[] {

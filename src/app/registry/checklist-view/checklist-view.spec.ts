@@ -56,7 +56,7 @@ describe('ChecklistView', () => {
     const ids = () => [...el.querySelectorAll('.cases .id')].map((td) => td.textContent);
     const statusBtn = (row: number, status: string) =>
       el.querySelector<HTMLButtonElement>(
-        `.cases .case:nth-child(${row}) .status-btn[data-status="${status}"]`,
+        `.cases .case:nth-of-type(${row}) .status-btn[data-status="${status}"]`,
       )!;
     return { fixture, el, settle, count, ids, statusBtn };
   }
@@ -75,7 +75,7 @@ describe('ChecklistView', () => {
     await settle();
     expect(count('.pass')).toBe('0');
 
-    const comment = el.querySelector<HTMLTextAreaElement>('.cases .case:nth-child(2) textarea')!;
+    const comment = el.querySelector<HTMLTextAreaElement>('.cases .case:nth-of-type(2) textarea')!;
     comment.value = 'Message not shown';
     comment.dispatchEvent(new Event('input'));
     await settle();
@@ -128,7 +128,7 @@ describe('ChecklistView', () => {
           duration: 7400,
           error: 'expect(locator).toBeVisible() failed',
           notes: ['Error shown: Invalid email or password.'],
-          screenshots: ['e2e-shots/save-0.png'],
+          screenshots: ['e2e-api/shots/save-0.png'],
         },
       ],
     });
@@ -136,11 +136,11 @@ describe('ChecklistView', () => {
     await settle();
 
     expect(el.querySelector('.e2e-run')!.textContent).toContain('1 of 3 cases');
-    const card = el.querySelector('.cases .case:nth-child(1)')!;
+    const card = el.querySelector('.cases .case:nth-of-type(1)')!;
     expect(card.querySelector('.e2e')!.textContent).toContain('Playwright: failed');
     expect(card.querySelector('.e2e')!.textContent).toContain('Invalid email or password.');
     expect(card.querySelector<HTMLImageElement>('.shots img')!.getAttribute('src')).toBe(
-      'e2e-shots/save-0.png',
+      'e2e-api/shots/save-0.png',
     );
     expect(statusBtn(1, 'Fail').classList).toContain('on');
     expect(count('.fail')).toBe('1');
@@ -149,5 +149,28 @@ describe('ChecklistView', () => {
     await settle();
     expect(statusBtn(1, 'Pass').classList).toContain('on');
     expect(card.querySelector('.e2e')!.textContent).not.toContain('sets the status');
+  });
+
+  it('groups cases under section headings and shows a running Playwright run', async () => {
+    const { fixture, el, settle } = await setup();
+    fixture.componentInstance.cases.set([
+      tc('TC-001', 'Open the Sign in page', { section: 'Login' }),
+      tc('TC-002', 'Click "Sign In"', { section: 'Login' }),
+      tc('TC-003', 'Click "Save"', { section: 'Tumor Tracking' }),
+    ]);
+    TestBed.inject(RegistryNavService).e2eRun.set({ state: 'running' });
+    await settle();
+
+    expect([...el.querySelectorAll('.cases .section')].map((h) => h.textContent!.trim())).toEqual([
+      'Login (runs first)',
+      'Tumor Tracking',
+    ]);
+    expect(el.querySelector('.e2e-run.running')!.textContent).toContain(
+      'Playwright is running the tests',
+    );
+
+    TestBed.inject(RegistryNavService).e2eRun.set({ state: 'unavailable' });
+    await settle();
+    expect(el.querySelector('.e2e-run.warn')!.textContent).toContain('npm start');
   });
 });

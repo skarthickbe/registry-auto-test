@@ -11,6 +11,7 @@ type Theme = 'light' | 'dark';
 type View = 'components' | 'checklist';
 
 const THEME_KEY = 'registry-auto-test.theme';
+const SIGN_IN_PATH = '/sign-in';
 
 @Component({
   selector: 'app-root',
@@ -109,14 +110,34 @@ export class App {
       return;
     }
     this.notice.set(null);
+    const components = this.registry.nav()?.components ?? {};
+    const routes = this.registry.routes(selection.tab.routes);
+    const tabCases = generateChecklist(rows, {
+      tabTitle: selection.tab.title,
+      routePath: routes[0]?.path,
+      components,
+      section: selection.tab.title,
+    });
+    // Every checklist starts with the sign-in page, which Playwright runs first.
+    const signIn = this.registry.nav()?.routes.find((r) => r.path === SIGN_IN_PATH && r.component);
+    const isSignInTab = routes.some((r) => r.path === SIGN_IN_PATH);
+    const loginCases =
+      signIn && !isSignInTab
+        ? generateChecklist(this.registry.componentTree([signIn.id]).rows.slice(0, 1), {
+            tabTitle: 'Sign in',
+            routePath: SIGN_IN_PATH,
+            components,
+            section: 'Login',
+          })
+        : [];
     this.checklist.set(
-      generateChecklist(rows, {
-        tabTitle: selection.tab.title,
-        routePath: this.registry.routes(selection.tab.routes)[0]?.path,
-        components: this.registry.nav()?.components ?? {},
-      }),
+      [...loginCases, ...tabCases].map((c, i) => ({
+        ...c,
+        id: `TC-${String(i + 1).padStart(3, '0')}`,
+      })),
     );
     this.view.set('checklist');
+    void this.registry.runE2e();
   }
 
   protected onUnusedCode(menu: NavMenu | null): void {

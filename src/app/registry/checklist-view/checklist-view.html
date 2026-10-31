@@ -26,11 +26,26 @@
   <span class="muted small">{{ done() }}% tested</span>
 </div>
 
-@if (registry.e2e(); as run) {
+@let runner = registry.e2eRun();
+@if (runner?.state === 'running') {
+  <p class="e2e-run running" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <strong>Playwright is running the tests…</strong>
+    {{ e2eMatched() }} of {{ total }} cases have a result so far.
+  </p>
+} @else if (runner?.state === 'unavailable') {
+  <p class="e2e-run warn" role="status">
+    <strong>Playwright did not start:</strong> the test runner is not running. Stop the app and
+    start it again with <code>npm start</code>.
+  </p>
+} @else if (runner?.state === 'error') {
+  <p class="e2e-run warn" role="status">
+    <strong>Playwright could not run:</strong> {{ runner?.error }}
+  </p>
+} @else if (registry.e2e(); as run) {
   <p class="e2e-run">
     <strong>Playwright</strong> last run {{ run.runAt | date: 'short' }} · {{ e2eMatched() }} of
     {{ total }} cases have an automated result.
-    <span class="muted">Run <code>npm run e2e</code>, then Refresh, to update.</span>
   </p>
 }
 
@@ -100,7 +115,10 @@
 </p>
 
 <div class="cases">
-  @for (c of filtered(); track c.id) {
+  @for (c of filtered(); track c.id; let i = $index) {
+    @if (c.section && c.section !== filtered()[i - 1]?.section) {
+      <h3 class="section">{{ c.section === 'Login' ? 'Login (runs first)' : c.section }}</h3>
+    }
     @let status = statusOf(c);
     <article class="case" [attr.data-status]="status">
       <div class="body">

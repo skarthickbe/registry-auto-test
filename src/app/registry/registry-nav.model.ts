@@ -105,7 +105,7 @@ export interface TabSelection {
   childDepth: ChildDepth;
 }
 
-/** Shape of public/e2e-results.json, written by e2e/checklist-reporter.ts after `npm run e2e`. */
+/** Results written by e2e/checklist-reporter.ts and served by scripts/e2e-runner.mjs at /e2e-api/results. */
 export interface E2eResults {
   runAt: string;
   status: string;
@@ -123,6 +123,17 @@ export interface E2eResult {
   error?: string;
   /** Annotations such as "Error shown: Invalid email or password." */
   notes: string[];
-  /** Paths relative to the app root, e.g. e2e-shots/x.png. */
+  /** Screenshot URLs, e.g. e2e-api/shots/x.png. */
   screenshots: string[];
+}
+
+/** State of the local Playwright runner (scripts/e2e-runner.mjs). */
+export interface E2eRunStatus {
+  /** `unavailable`: the runner is not running (start the app with `npm start`). */
+  state: 'idle' | 'running' | 'finished' | 'error' | 'unavailable';
+  startedAt?: string;
+  finishedAt?: string;
+  exitCode?: number;
+  error?: string;
+  log?: string[];
 }

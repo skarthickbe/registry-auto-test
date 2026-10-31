@@ -2,10 +2,11 @@ import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/tes
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Writes results where the checklist UI (served from public/) can read them.
-const PUBLIC = path.resolve(__dirname, '..', 'public');
-const OUT = path.join(PUBLIC, 'e2e-results.json');
-const SHOTS = path.join(PUBLIC, 'e2e-shots');
+// Writes results for the checklist UI, which reads them through scripts/e2e-runner.mjs.
+// Not under public/: the dev server would reload the page on every write.
+const DIR = path.resolve(__dirname, 'ui-results');
+const OUT = path.join(DIR, 'results.json');
+const SHOTS = path.join(DIR, 'shots');
 
 interface E2eResult {
   /** From the describe title, e.g. "Sign in page (AuthSignInComponent)". */
@@ -16,7 +17,7 @@ interface E2eResult {
   duration: number;
   error?: string;
   notes: string[];
-  /** Paths relative to public/. */
+  /** URLs the UI can load, e.g. e2e-api/shots/x.png. */
   screenshots: string[];
 }
 
@@ -30,10 +31,13 @@ const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, '');
 export default class ChecklistReporter implements Reporter {
   // Keyed by test id, so a retry replaces the earlier attempt.
   private readonly results = new Map<string, E2eResult>();
+  private runAt = new Date().toISOString();
 
   onBegin(): void {
+    this.runAt = new Date().toISOString();
     fs.rmSync(SHOTS, { recursive: true, force: true });
     fs.mkdirSync(SHOTS, { recursive: true });
+    this.write('running');
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
@@ -46,7 +50,7 @@ export default class ChecklistReporter implements Reporter {
       if (a.path) fs.copyFileSync(a.path, path.join(SHOTS, name));
       else if (a.body) fs.writeFileSync(path.join(SHOTS, name), a.body);
       else return;
-      screenshots.push(`e2e-shots/${name}`);
+      screenshots.push(`e2e-api/shots/${name}`);
     });
     const annotations = [...test.annotations, ...(result.annotations ?? [])];
     this.results.set(test.id, {
@@ -60,15 +64,21 @@ export default class ChecklistReporter implements Reporter {
       notes: [...new Set(annotations.map((a) => `${a.type}: ${a.description ?? ''}`))],
       screenshots,
     });
+    // Written after every test so the UI can show results while the run continues.
+    this.write('running');
   }
 
   onEnd(result: FullResult): void {
+    this.write(result.status);
+  }
+
+  private write(status: string): void {
     fs.writeFileSync(
       OUT,
       JSON.stringify(
         {
-          runAt: new Date().toISOString(),
-          status: result.status,
+          runAt: this.runAt,
+          status,
           results: [...this.results.values()],
         },
         null,
