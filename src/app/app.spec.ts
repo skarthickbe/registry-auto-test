@@ -100,4 +100,19 @@ describe('App', () => {
 
     expect(el.querySelector('main .notice')?.textContent).toContain('Tumor Tracking');
   });
+
+  it('switches and remembers the theme', async () => {
+    localStorage.setItem('registry-auto-test.theme', 'light');
+    const { el } = await render();
+    expect(document.documentElement.dataset['theme']).toBe('light');
+
+    const toggle = el.querySelector<HTMLButtonElement>('.theme-toggle')!;
+    expect(toggle.textContent).toContain('Dark');
+    toggle.click();
+    TestBed.tick();
+
+    expect(document.documentElement.dataset['theme']).toBe('dark');
+    expect(localStorage.getItem('registry-auto-test.theme')).toBe('dark');
+    expect(toggle.textContent).toContain('Light');
+  });
 });

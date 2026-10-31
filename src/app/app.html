@@ -7,6 +7,15 @@
 </aside>
 
 <main class="content">
+  <button
+    type="button"
+    class="theme-toggle"
+    [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+    (click)="toggleTheme()"
+  >
+    {{ theme() === 'dark' ? '☀️ Light' : '🌙 Dark' }}
+  </button>
+
   @if (notice(); as message) {
     <p class="notice">{{ message }}</p>
   }

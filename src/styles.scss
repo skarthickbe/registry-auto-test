@@ -1,6 +1,24 @@
-// Light by default; dark when the OS appearance is dark.
+// Light by default; dark when the OS appearance is dark, unless the theme button
+// has set <html data-theme="light|dark">.
+@mixin dark-theme {
+  color-scheme: dark;
+  --page: #10141c;
+  --bg: #161b26;
+  --surface: #1b2130;
+  --border: #323a4b;
+  --border-strong: #4a5468;
+  --text: #e8ebf2;
+  --text-soft: #d3d8e2;
+  --muted: #98a1b3;
+  --primary: #5a73a8;
+  --on-primary: #0f1420;
+  --step-bg: #263247;
+  --step-fg: #8fb0ef;
+  --danger: #f08b8b;
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --page: #f6f7f9;
   --bg: #eef1f5;
   --surface: #ffffff;
@@ -17,21 +35,13 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --page: #10141c;
-    --bg: #161b26;
-    --surface: #1b2130;
-    --border: #323a4b;
-    --border-strong: #4a5468;
-    --text: #e8ebf2;
-    --text-soft: #d3d8e2;
-    --muted: #98a1b3;
-    --primary: #5a73a8;
-    --on-primary: #0f1420;
-    --step-bg: #263247;
-    --step-fg: #8fb0ef;
-    --danger: #f08b8b;
+  :root:not([data-theme='light']) {
+    @include dark-theme;
   }
+}
+
+:root[data-theme='dark'] {
+  @include dark-theme;
 }
 
 * {
