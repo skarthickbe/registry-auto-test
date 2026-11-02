@@ -27,6 +27,46 @@
 </div>
 
 @let runner = registry.e2eRun();
+<div class="live-bar">
+  <button type="button" class="btn live-btn" [disabled]="running()" (click)="runLive()">
+    {{ running() ? 'Playwright is running…' : '▶ Run Playwright live' }}
+  </button>
+  <span class="muted small">Runs the tests again and shows the test browser here.</span>
+</div>
+
+@if (running() || frameReady()) {
+  <figure class="live">
+    <figcaption>
+      @if (running()) {
+        <span class="live-dot" aria-hidden="true"></span> <strong>LIVE</strong>
+      } @else {
+        <strong>Last frame</strong>
+      }
+      @if (registry.liveTest(); as title) {
+        · {{ title }}
+      }
+    </figcaption>
+    <img
+      [src]="liveFrame()"
+      [hidden]="!frameReady()"
+      alt="Playwright test browser"
+      (load)="frameReady.set(true); frameErrors.set(0)"
+      (error)="frameErrors.update((n) => n + 1)"
+    />
+    @if (!frameReady()) {
+      <div class="live-wait muted">
+        Waiting for the test browser…
+        @if (frameErrors() > 15) {
+          <p>
+            No live picture yet. If this stays, the test runner is an older version: stop the app
+            and start it again with <code>npm start</code>.
+          </p>
+        }
+      </div>
+    }
+  </figure>
+}
+
 @if (runner?.state === 'running') {
   <p class="e2e-run running" role="status">
     <span class="spinner" aria-hidden="true"></span>

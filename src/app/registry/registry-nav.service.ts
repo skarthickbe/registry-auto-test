@@ -18,6 +18,8 @@ export class RegistryNavService {
   readonly e2e = signal<E2eResults | null>(null);
   /** The Playwright run started from the UI, if any. */
   readonly e2eRun = signal<E2eRunStatus | null>(null);
+  /** Title of the test the live view is showing. */
+  readonly liveTest = signal<string | null>(null);
 
   private readonly routesById = computed(
     () => new Map((this.nav()?.routes ?? []).map((r) => [r.id, r] as const)),
@@ -40,9 +42,14 @@ export class RegistryNavService {
   }
 
   /** Starts Playwright through the local runner and refreshes results until the run ends. */
-  async runE2e(): Promise<void> {
+  async runE2e(options: { headed?: boolean } = {}): Promise<void> {
+    this.liveTest.set(null);
     try {
-      this.e2eRun.set(await firstValueFrom(this.http.post<E2eRunStatus>('e2e-api/run', {})));
+      this.e2eRun.set(
+        await firstValueFrom(
+          this.http.post<E2eRunStatus>('e2e-api/run', { headed: options.headed ?? false }),
+        ),
+      );
     } catch (e) {
       // 409: a run is already in progress, so just follow it.
       if (!(e instanceof HttpErrorResponse && e.status === 409)) {
@@ -60,8 +67,19 @@ export class RegistryNavService {
         this.e2eRun.set({ state: 'unavailable' });
         return;
       }
-      await this.loadE2e();
+      await Promise.all([this.loadE2e(), this.loadLiveTest()]);
       if (this.e2eRun()?.state !== 'running') return;
+    }
+  }
+
+  private async loadLiveTest(): Promise<void> {
+    try {
+      const live = await firstValueFrom(
+        this.http.get<{ title: string }>(`e2e-api/live/test.json?t=${Date.now()}`),
+      );
+      this.liveTest.set(live.title);
+    } catch {
+      // No test has started yet.
     }
   }
 

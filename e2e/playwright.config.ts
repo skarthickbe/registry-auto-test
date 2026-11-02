@@ -23,6 +23,7 @@ export default defineConfig({
     baseURL: process.env['REGISTRY_URL'] ?? 'http://localhost:4300',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
+    launchOptions: { slowMo: Number(process.env['SLOW_MO'] ?? 0) },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

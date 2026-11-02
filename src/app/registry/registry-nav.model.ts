@@ -103,6 +103,8 @@ export interface TabSelection {
   menu: NavMenu;
   tab: NavTab;
   childDepth: ChildDepth;
+  /** Show the Playwright browser while it runs (slowed down to follow). */
+  showBrowser: boolean;
 }
 
 /** Results written by e2e/checklist-reporter.ts and served by scripts/e2e-runner.mjs at /e2e-api/results. */
@@ -133,6 +135,7 @@ export interface E2eRunStatus {
   state: 'idle' | 'running' | 'finished' | 'error' | 'unavailable';
   startedAt?: string;
   finishedAt?: string;
+  headed?: boolean;
   exitCode?: number;
   error?: string;
   log?: string[];

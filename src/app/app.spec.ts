@@ -225,6 +225,23 @@ describe('App', () => {
     );
   });
 
+  it('asks the runner to show the browser when that option is ticked', async () => {
+    const { el, choose, click } = await render();
+    await choose('menu', 'Patient Management');
+    await choose('tab', 'Tumor Tracking');
+    const http = TestBed.inject(HttpTestingController);
+
+    await click('.btn.primary');
+    expect(http.expectOne('e2e-api/run').request.body).toEqual({ headed: false });
+
+    [...el.querySelectorAll<HTMLLabelElement>('app-nav-panel label.check')]
+      .find((l) => l.textContent!.includes('Show the browser'))!
+      .querySelector('input')!
+      .click();
+    await click('.btn.primary');
+    expect(http.expectOne('e2e-api/run').request.body).toEqual({ headed: true });
+  });
+
   it('switches and remembers the theme', async () => {
     localStorage.setItem('registry-auto-test.theme', 'light');
     const { el } = await render();

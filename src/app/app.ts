@@ -137,7 +137,7 @@ export class App {
       })),
     );
     this.view.set('checklist');
-    void this.registry.runE2e();
+    void this.registry.runE2e({ headed: selection.showBrowser });
   }
 
   protected onUnusedCode(menu: NavMenu | null): void {

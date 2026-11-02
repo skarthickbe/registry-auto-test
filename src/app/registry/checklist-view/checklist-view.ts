@@ -13,6 +13,7 @@ interface CaseResult {
 }
 
 const STORAGE_PREFIX = 'registry-auto-test.checklist.';
+const LIVE_FRAME_MS = 400;
 const ALL = '';
 
 /** Results are stored by component + title, so they survive regeneration (ids shift when the ticked components change). */
@@ -120,8 +121,28 @@ export class ChecklistView {
     );
   });
 
+  /** Bumped while a run is in progress so the live frame reloads. */
+  protected readonly frameTick = signal(0);
+  protected readonly liveFrame = computed(() => `e2e-api/live/frame.jpg?t=${this.frameTick()}`);
+  /** False until the first frame of a run has loaded. */
+  protected readonly frameReady = signal(false);
+  /** Frame requests that failed in a row; many means the runner has no live view. */
+  protected readonly frameErrors = signal(0);
+  protected readonly running = computed(() => this.registry.e2eRun()?.state === 'running');
+
   constructor() {
     effect(() => writeResults(this.storageKey(), this.results()));
+    effect((onCleanup) => {
+      if (!this.running()) return;
+      const timer = setInterval(() => this.frameTick.update((n) => n + 1), LIVE_FRAME_MS);
+      onCleanup(() => clearInterval(timer));
+    });
+  }
+
+  protected runLive(): void {
+    this.frameReady.set(false);
+    this.frameErrors.set(0);
+    void this.registry.runE2e();
   }
 
   protected e2eOf(c: TestCase): E2eResult | undefined {

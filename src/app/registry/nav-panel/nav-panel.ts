@@ -11,6 +11,7 @@ interface SavedState {
   menuId?: string;
   tabId?: string;
   showOther?: boolean;
+  showBrowser?: boolean;
   childDepth?: ChildDepth;
 }
 
@@ -34,6 +35,7 @@ export class NavPanel {
 
   private readonly saved = readState();
   protected readonly showOther = signal(this.saved.showOther ?? false);
+  protected readonly showBrowser = signal(this.saved.showBrowser ?? false);
   protected readonly childDepth = signal<ChildDepth>(this.saved.childDepth ?? null);
   protected readonly menuId = signal(this.saved.menuId ?? '');
   protected readonly tabId = signal(this.saved.tabId ?? '');
@@ -121,7 +123,9 @@ export class NavPanel {
   private readonly selection = computed<TabSelection | null>(() => {
     const menu = this.selectedMenu();
     const tab = this.selectedTab();
-    return menu && tab ? { menu, tab, childDepth: this.childDepth() } : null;
+    return menu && tab
+      ? { menu, tab, childDepth: this.childDepth(), showBrowser: this.showBrowser() }
+      : null;
   });
 
   constructor() {
@@ -138,6 +142,7 @@ export class NavPanel {
         menuId: this.menuId(),
         tabId: this.tabId(),
         showOther: this.showOther(),
+        showBrowser: this.showBrowser(),
         childDepth: this.childDepth(),
       }),
     );

@@ -1,4 +1,6 @@
-import { type Page, expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 
 // Test titles start with the checklist ids generated for "Other Routes › /sign-in", so results can be matched back.
 

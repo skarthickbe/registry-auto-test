@@ -67,6 +67,15 @@
     Show other menus (static / unconfirmed routes)
   </label>
 
+  <label class="check">
+    <input
+      type="checkbox"
+      [checked]="showBrowser()"
+      (change)="showBrowser.set($any($event.target).checked)"
+    />
+    Show the browser while Playwright runs (slower, to watch it live)
+  </label>
+
   <label class="field-label" for="depth">Child depth</label>
   <app-select
     triggerId="depth"

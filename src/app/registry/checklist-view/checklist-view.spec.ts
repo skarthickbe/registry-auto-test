@@ -1,5 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
@@ -172,5 +172,28 @@ describe('ChecklistView', () => {
     TestBed.inject(RegistryNavService).e2eRun.set({ state: 'unavailable' });
     await settle();
     expect(el.querySelector('.e2e-run.warn')!.textContent).toContain('npm start');
+  });
+
+  it('starts a live run and shows the test browser while it runs', async () => {
+    const { el, settle } = await setup();
+    const button = () => el.querySelector<HTMLButtonElement>('.live-btn')!;
+    expect(el.querySelector('.live')).toBeNull();
+
+    button().click();
+    await settle();
+    expect(TestBed.inject(HttpTestingController).expectOne('e2e-api/run').request.body).toEqual({
+      headed: false,
+    });
+
+    const registry = TestBed.inject(RegistryNavService);
+    registry.e2eRun.set({ state: 'running' });
+    registry.liveTest.set('TC-007 Click "Sign In"');
+    await settle();
+    expect(button().disabled).toBe(true);
+    expect(el.querySelector('.live figcaption')!.textContent).toContain('LIVE');
+    expect(el.querySelector('.live figcaption')!.textContent).toContain('TC-007 Click "Sign In"');
+    expect(el.querySelector<HTMLImageElement>('.live img')!.getAttribute('src')).toContain(
+      'e2e-api/live/frame.jpg',
+    );
   });
 });
