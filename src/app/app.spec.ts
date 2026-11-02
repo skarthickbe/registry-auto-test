@@ -232,14 +232,20 @@ describe('App', () => {
     const http = TestBed.inject(HttpTestingController);
 
     await click('.btn.primary');
-    expect(http.expectOne('e2e-api/run').request.body).toEqual({ headed: false });
+    const first = http.expectOne('e2e-api/run').request.body;
+    expect(first.headed).toBe(false);
+    // The generated checklist goes to the runner, so Playwright runs exactly these cases.
+    expect(first.cases.map((c: { title: string }) => c.title)).toEqual([
+      'Open the Tumor Tracking page',
+      'Open the AddTumorComponent dialog',
+    ]);
 
     [...el.querySelectorAll<HTMLLabelElement>('app-nav-panel label.check')]
       .find((l) => l.textContent!.includes('Show the browser'))!
       .querySelector('input')!
       .click();
     await click('.btn.primary');
-    expect(http.expectOne('e2e-api/run').request.body).toEqual({ headed: true });
+    expect(http.expectOne('e2e-api/run').request.body.headed).toBe(true);
   });
 
   it('switches and remembers the theme', async () => {

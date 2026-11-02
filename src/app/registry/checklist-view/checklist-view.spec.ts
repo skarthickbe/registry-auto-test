@@ -181,9 +181,9 @@ describe('ChecklistView', () => {
 
     button().click();
     await settle();
-    expect(TestBed.inject(HttpTestingController).expectOne('e2e-api/run').request.body).toEqual({
-      headed: false,
-    });
+    const body = TestBed.inject(HttpTestingController).expectOne('e2e-api/run').request.body;
+    expect(body.headed).toBe(false);
+    expect(body.cases.map((c: { id: string }) => c.id)).toEqual(['TC-001', 'TC-002', 'TC-003']);
 
     const registry = TestBed.inject(RegistryNavService);
     registry.e2eRun.set({ state: 'running' });

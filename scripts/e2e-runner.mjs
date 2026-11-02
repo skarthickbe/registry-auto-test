@@ -1,7 +1,8 @@
 // Lets the checklist UI start Playwright, which a browser cannot do itself.
 //
 //   POST /run         start `playwright test -c e2e` (409 while a run is in progress);
-//                     body { "headed": true } shows the browser, slowed down to follow
+//                     body { "headed": true } shows the browser, slowed down to follow;
+//                     body { "cases": [...] } is the checklist e2e/2-checklist.spec.ts runs
 //   GET  /status      { state, startedAt, finishedAt, exitCode, log }
 //   GET  /results     latest results written by e2e/checklist-reporter.ts
 //   GET  /shots/<png> a screenshot from those results
@@ -19,14 +20,19 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const PORT = Number(process.env.E2E_RUNNER_PORT ?? 4400);
 const RESULTS_DIR = path.join(ROOT, 'e2e', 'ui-results');
 const LIVE_DIR = path.join(RESULTS_DIR, 'live');
+const PLAN_FILE = path.join(RESULTS_DIR, 'plan.json');
+const MAX_BODY = 5_000_000;
 
 let status = { state: 'idle' };
 let log = [];
 
 const SLOW_MO_MS = 600;
 
-function startRun({ headed = false } = {}) {
+function startRun({ headed = false, cases = [] } = {}) {
   if (status.state === 'running') return false;
+  // The spec reads the cases as data (labels, paths); nothing from them reaches the command line.
+  fs.mkdirSync(RESULTS_DIR, { recursive: true });
+  fs.writeFileSync(PLAN_FILE, JSON.stringify({ cases }, null, 2));
   log = [];
   status = { state: 'running', startedAt: new Date().toISOString(), headed };
   fs.rmSync(LIVE_DIR, { recursive: true, force: true });
@@ -65,16 +71,16 @@ http
     };
     if (req.method === 'POST' && req.url === '/run') {
       let body = '';
-      req.on('data', (chunk) => (body += chunk).length > 1000 && req.destroy());
+      req.on('data', (chunk) => (body += chunk).length > MAX_BODY && req.destroy());
       req.on('end', () => {
-        let headed = false;
+        let request;
         try {
-          // Only this boolean is read from the request; nothing else reaches the command.
-          headed = JSON.parse(body || '{}').headed === true;
+          request = JSON.parse(body || '{}');
         } catch {
           return send(400, { error: 'Body must be JSON' });
         }
-        send(startRun({ headed }) ? 202 : 409, status);
+        const cases = Array.isArray(request.cases) ? request.cases : [];
+        send(startRun({ headed: request.headed === true, cases }) ? 202 : 409, status);
       });
       return;
     }

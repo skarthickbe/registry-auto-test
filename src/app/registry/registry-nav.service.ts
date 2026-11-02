@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import type { TestCase } from './checklist-generator';
 import { ComponentTree, buildComponentTree } from './component-tree';
 import { E2eResults, E2eRunStatus, RegistryNav, RegistryRoute } from './registry-nav.model';
 
@@ -42,12 +43,15 @@ export class RegistryNavService {
   }
 
   /** Starts Playwright through the local runner and refreshes results until the run ends. */
-  async runE2e(options: { headed?: boolean } = {}): Promise<void> {
+  async runE2e(options: { headed?: boolean; cases?: TestCase[] } = {}): Promise<void> {
     this.liveTest.set(null);
     try {
       this.e2eRun.set(
         await firstValueFrom(
-          this.http.post<E2eRunStatus>('e2e-api/run', { headed: options.headed ?? false }),
+          this.http.post<E2eRunStatus>('e2e-api/run', {
+            headed: options.headed ?? false,
+            cases: options.cases ?? [],
+          }),
         ),
       );
     } catch (e) {

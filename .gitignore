@@ -52,3 +52,4 @@ Thumbs.db
 /e2e/test-results
 /e2e/results.json
 /e2e/ui-results
+/e2e/.auth

@@ -25,5 +25,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: { slowMo: Number(process.env['SLOW_MO'] ?? 0) },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // Signs in once for pages behind sign-in (skipped without a test account).
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, dependencies: ['setup'] },
+  ],
 });

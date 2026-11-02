@@ -142,7 +142,7 @@ export class ChecklistView {
   protected runLive(): void {
     this.frameReady.set(false);
     this.frameErrors.set(0);
-    void this.registry.runE2e();
+    void this.registry.runE2e({ cases: this.cases() });
   }
 
   protected e2eOf(c: TestCase): E2eResult | undefined {

@@ -189,10 +189,6 @@
   font-size: 0.85rem;
 }
 
-.e2e-head {
-  margin-bottom: 2px;
-}
-
 .e2e-error {
   margin: 6px 0 0;
   white-space: pre-wrap;
@@ -371,11 +367,21 @@
   font-weight: 600;
 }
 
-.verify {
+.verify,
+.auto {
   padding: 1px 8px;
-  border: 1px dashed var(--border-strong);
   border-radius: 999px;
+}
+
+.verify {
+  border: 1px dashed var(--border-strong);
   color: var(--muted);
+}
+
+.auto {
+  background: color-mix(in srgb, var(--pass) 15%, transparent);
+  color: var(--pass);
+  font-weight: 600;
 }
 
 .title {

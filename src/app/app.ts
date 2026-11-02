@@ -130,14 +130,13 @@ export class App {
             section: 'Login',
           })
         : [];
-    this.checklist.set(
-      [...loginCases, ...tabCases].map((c, i) => ({
-        ...c,
-        id: `TC-${String(i + 1).padStart(3, '0')}`,
-      })),
-    );
+    const cases = [...loginCases, ...tabCases].map((c, i) => ({
+      ...c,
+      id: `TC-${String(i + 1).padStart(3, '0')}`,
+    }));
+    this.checklist.set(cases);
     this.view.set('checklist');
-    void this.registry.runE2e({ headed: selection.showBrowser });
+    void this.registry.runE2e({ headed: selection.showBrowser, cases });
   }
 
   protected onUnusedCode(menu: NavMenu | null): void {

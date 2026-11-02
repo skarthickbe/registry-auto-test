@@ -7,6 +7,24 @@ export type Status = 'Not tested' | 'Pass' | 'Fail' | 'Blocked';
 export type Category =
   'Navigation' | 'Field validation' | 'Field input' | 'Buttons' | 'Dialogs' | 'Lists';
 
+/** A form control on the page under test. */
+export interface FieldRef {
+  /** formControlName. */
+  name: string;
+  label: string;
+}
+
+/**
+ * How Playwright can check a case by itself (see e2e/2-checklist.spec.ts).
+ * Cases without one are checked by hand. `page` is the route to open first.
+ */
+export type Automation =
+  | { kind: 'open'; page: string; selector?: string }
+  | { kind: 'required'; page: string; field: FieldRef; error?: string }
+  | { kind: 'maxLength'; page: string; field: FieldRef; max: number }
+  | { kind: 'invalidEmail'; page: string; field: FieldRef; error?: string }
+  | { kind: 'toggle'; page: string; field: FieldRef };
+
 export interface TestCase {
   id: string;
   /** Checklist section, e.g. "Login" or the tab title. */
@@ -22,6 +40,7 @@ export interface TestCase {
   source: string;
   /** Verified: the trigger and outcome are both in the code. Needs verification: inferred or conditional. */
   verification: Verification;
+  automation?: Automation;
 }
 
 export interface ChecklistContext {
@@ -41,12 +60,18 @@ const CLOSING = /\b(close|cancel|dismiss)\b/i;
 /** Test cases for the given (ticked) component rows, in tree order. */
 export function generateChecklist(rows: ComponentRow[], ctx: ChecklistContext): TestCase[] {
   const drafts: Draft[] = [];
+  // Fields inside a dialog are not on the page until the dialog is opened, so they stay manual.
+  const inDialog = new Set<string>();
+  for (const row of rows) {
+    if (row.viaDialog || (row.parent && inDialog.has(row.parent))) inDialog.add(row.key);
+  }
   for (const row of rows) {
     const c = row.component;
     const where = (line?: number) => (line && c.template ? `${c.template}:${line}` : c.file);
+    const page = inDialog.has(row.key) ? undefined : ctx.routePath;
     if (row.level === 0) drafts.push(...pageCases(c, ctx));
     if (row.viaDialog) drafts.push(...dialogCases(row, ctx));
-    for (const f of c.details.fields) drafts.push(...fieldCases(c.name, f, where(f.line)));
+    for (const f of c.details.fields) drafts.push(...fieldCases(c.name, f, where(f.line), page));
     for (const b of uniqueButtons(c.details.buttons))
       drafts.push(...buttonCases(c.name, b, where(b.line)));
     drafts.push(...listCases(c, where()));
@@ -75,9 +100,22 @@ function pageCases(c: RegistryComponent, ctx: ChecklistContext): Draft[] {
       priority: 'High',
       source: c.file,
       verification: 'Verified from source',
+      automation: ctx.routePath
+        ? { kind: 'open', page: ctx.routePath, selector: elementSelector(c.selector) }
+        : undefined,
     },
   ];
 }
+
+/** The element part of a component selector: 'app-card, [x]' → 'app-card'. */
+function elementSelector(selector?: string): string | undefined {
+  return selector
+    ?.split(',')
+    .map((s) => s.trim())
+    .find((s) => /^[a-z][\w-]*$/i.test(s));
+}
+
+const TYPED_KINDS = ['text', 'textarea', 'date', 'password', 'email', 'number', 'tel'];
 
 function dialogCases(row: ComponentRow, ctx: ChecklistContext): Draft[] {
   const c = row.component;
@@ -112,9 +150,11 @@ function dialogCases(row: ComponentRow, ctx: ChecklistContext): Draft[] {
   return cases;
 }
 
-function fieldCases(component: string, f: FormField, source: string): Draft[] {
+function fieldCases(component: string, f: FormField, source: string, page?: string): Draft[] {
   const cases: Draft[] = [];
   const base = { component, source };
+  const field = { name: f.name, label: f.label };
+  const typed = page && TYPED_KINDS.includes(f.kind) ? page : undefined;
   const used = new Set<string>();
   const error = (pattern: RegExp) => {
     const hit = f.errors.find((e) => pattern.test(e) && !used.has(e));
@@ -134,6 +174,7 @@ function fieldCases(component: string, f: FormField, source: string): Draft[] {
         : `"${f.label}" is marked invalid and the form is not saved.`,
       priority: 'High',
       verification: msg ? 'Verified from source' : 'Needs verification',
+      automation: typed ? { kind: 'required', page: typed, field, error: msg } : undefined,
     });
   }
   if (f.requiredWhen) {
@@ -161,6 +202,7 @@ function fieldCases(component: string, f: FormField, source: string): Draft[] {
       expected: `Only ${max} characters are kept.`,
       priority: 'Medium',
       verification: 'Verified from source',
+      automation: typed ? { kind: 'maxLength', page: typed, field, max } : undefined,
     });
   }
   for (const v of f.validators ?? []) {
@@ -174,6 +216,10 @@ function fieldCases(component: string, f: FormField, source: string): Draft[] {
       expected: msg ? `"${msg}" is shown.` : `"${f.label}" is marked invalid.`,
       priority: 'Medium',
       verification: msg ? 'Verified from source' : 'Needs verification',
+      automation:
+        typed && v === 'email'
+          ? { kind: 'invalidEmail', page: typed, field, error: msg }
+          : undefined,
     });
   }
   // Any error message not covered above still deserves a case.
@@ -203,6 +249,10 @@ function fieldCases(component: string, f: FormField, source: string): Draft[] {
       expected: 'The chosen value is shown and kept after saving.',
       priority: 'Low',
       verification: 'Needs verification',
+      automation:
+        page && (f.kind === 'checkbox' || f.kind === 'toggle')
+          ? { kind: 'toggle', page, field }
+          : undefined,
     });
   }
   return cases;

@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 
-// Test titles start with the checklist ids generated for "Other Routes › /sign-in", so results can be matched back.
+// Sign-in checks the checklist runner (2-checklist.spec.ts) cannot do by itself.
+// Titles match the generated case titles, so results land on the right checklist cases.
 
 // A made-up account: failed attempts must never lock a real user.
 const FAKE_EMAIL = process.env['REGISTRY_FAKE_EMAIL'] ?? 'playwright.wrong-password@example.com';
@@ -16,37 +17,6 @@ test.describe('Sign in page (AuthSignInComponent)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/sign-in');
     await expect(page.locator('#email')).toBeVisible();
-  });
-
-  test('TC-001 Open the Sign in page', async ({ page }) => {
-    await expect(page.locator('#password')).toBeVisible();
-    await expect(signInButton(page)).toBeVisible();
-  });
-
-  test('TC-002 Email Address is required', async ({ page }) => {
-    await page.locator('#email').click();
-    await page.locator('#password').click();
-    await expect(page.getByText('Email address is required')).toBeVisible();
-  });
-
-  test('TC-003 Email Address rejects invalid values (email)', async ({ page }) => {
-    await page.locator('#email').fill('not-an-email');
-    await page.locator('#password').click();
-    await expect(page.getByText('Please enter a valid email address')).toBeVisible();
-  });
-
-  test('TC-004 Password is required', async ({ page }) => {
-    await page.locator('#password').click();
-    await page.locator('#email').click();
-    await expect(page.getByText('New Password is required')).toBeVisible();
-  });
-
-  test('TC-005 Remember me: switch it on, then off', async ({ page }) => {
-    const rememberMe = page.getByRole('checkbox', { name: 'Remember me' });
-    await rememberMe.check();
-    await expect(rememberMe).toBeChecked();
-    await rememberMe.uncheck();
-    await expect(rememberMe).not.toBeChecked();
   });
 
   test('TC-006 Click "Show / Hide"', async ({ page }) => {

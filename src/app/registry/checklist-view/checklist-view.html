@@ -169,6 +169,11 @@
           @if (c.verification === 'Needs verification') {
             <span class="verify">Needs verification</span>
           }
+          @if (c.automation) {
+            <span class="auto" title="Playwright checks this case">Auto</span>
+          } @else {
+            <span class="verify" title="Check this case by hand">Manual</span>
+          }
           <span class="muted">{{ c.component }}</span>
         </div>
         <div class="title">{{ c.title }}</div>
